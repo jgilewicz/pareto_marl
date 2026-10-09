@@ -22,7 +22,8 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
 - `pareto_marl/envs/contract.py` — env contract shared by all JAX envs
   - `EnvSpec`: static `obs_dim`, `action_dim`, `episode_length` + `params`
     (env-specific pytree, e.g. `mjx.Model`)
-  - `EnvState`: opaque `physics`, raw float32 `obs`, `reward`, `done`,
+  - `EnvState`: opaque `physics`, raw float32 `obs`, `reward`,
+    `terminated`, `done` (terminated or truncated),
     `metrics` (`x_velocity`), episode return/length bookkeeping
   - `reset(spec, key)`, `step(spec, state, action, key)`: single env, the
     trainer batches with `jax.vmap`

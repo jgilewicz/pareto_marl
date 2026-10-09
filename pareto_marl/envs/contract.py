@@ -20,6 +20,7 @@ class EnvState:
     physics: Any
     obs: jax.Array
     reward: jax.Array
+    terminated: jax.Array
     done: jax.Array
     metrics: dict[str, jax.Array]
     episode_return: jax.Array
@@ -51,6 +52,7 @@ def initial_state(
         physics=physics,
         obs=obs.astype(jnp.float32),
         reward=zero,
+        terminated=zero,
         done=zero,
         metrics=metrics,
         episode_return=zero,
@@ -80,6 +82,7 @@ def finish_step(
         physics=physics,
         obs=obs,
         reward=reward,
+        terminated=t.terminated.astype(jnp.float32),
         done=done.astype(jnp.float32),
         metrics=t.metrics,
         episode_return=jnp.where(done, 0.0, episode_return),

@@ -21,6 +21,8 @@
 - Autoreset = gymnasium `SAME_STEP`: the final step returns its own reward,
   metrics and `done=1`, but the obs of the new episode. `done` = terminated
   or truncated (no bootstrapping on truncation, as CleanRL).
+- `terminated` is exposed separately: gymnasium `NormalizeReward` resets its
+  discounted return on `terminated` only, not on truncation.
 - Env `step` clips actions to [-1, 1] (CleanRL `ClipAction`); obs and reward
   are raw, normalization and reward scaling are the trainer's job.
 - `returned_episode_return/length` are valid only where
