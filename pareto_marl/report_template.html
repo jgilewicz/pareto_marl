@@ -1,0 +1,440 @@
+<title>Does the actuator partition matter?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one lab-notebook column; verdict first, then evidence per K,
+   then the cost/size trade-off, training curves, full table, method. */
+:root {
+  --paper: #f7f8f9;
+  --sheet: #ffffff;
+  --ink: #15191e;
+  --ink-2: #4a525c;
+  --ink-3: #7a838e;
+  --rule: #dfe3e8;
+  --rule-strong: #c3c9d1;
+  --accent: #2a78d6;
+  --random: #9aa3ad;
+  --go: #13804f;
+  --go-bg: #e3f3ea;
+  --nogo: #b8322f;
+  --nogo-bg: #fbe7e6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --chip-ink: #ffffff;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.9375rem; --t-lg: 1.25rem;
+  --t-xl: 1.75rem; --t-2xl: 2.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+    --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+    --accent: #3987e5; --random: #6c7681;
+    --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+  --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+  --accent: #3987e5; --random: #6c7681;
+  --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--f-body);
+  font-size: var(--t-md); line-height: 1.55;
+  padding-inline: 16px; padding-block: 40px 64px;
+}
+main { max-width: 980px; margin-inline: auto; display: grid; gap: 56px; }
+h1, h2 { font-family: var(--f-display); font-weight: 600; text-wrap: balance;
+  margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); line-height: 1.1; }
+h2 { font-size: var(--t-xl); line-height: 1.2; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3);
+  letter-spacing: 0.06em; text-transform: uppercase; }
+.lede { color: var(--ink-2); font-size: var(--t-lg); line-height: 1.45; }
+section { display: grid; gap: 18px; }
+.head { display: grid; gap: 10px; }
+.num { font-variant-numeric: tabular-nums; font-family: var(--f-mono); }
+.muted { color: var(--ink-3); }
+.small { font-size: var(--t-sm); }
+
+/* verdict */
+.verdict { background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 24px; display: grid; gap: 20px; }
+.verdict-top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+.stamp { font-family: var(--f-display); font-weight: 600; font-size: var(--t-xl);
+  padding: 4px 16px; border-radius: 4px; border: 2px solid currentColor;
+  letter-spacing: 0.04em; }
+.stamp.go { color: var(--go); background: var(--go-bg); }
+.stamp.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs);
+  font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.pill.go { color: var(--go); background: var(--go-bg); }
+.pill.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: var(--t-xs);
+  text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+td.r, th.r { text-align: right; }
+
+/* partition chip: 8 actuator cells, grouped by leg */
+.chip { display: inline-flex; gap: 3px; }
+.leg { display: inline-flex; gap: 1px; }
+.cell { width: 13px; height: 17px; border-radius: 2px; font-family: var(--f-mono);
+  font-size: 10px; line-height: 17px; text-align: center; color: var(--chip-ink);
+  font-weight: 500; }
+.legend-chip { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+
+/* strip plot */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 18px 20px; display: grid; gap: 10px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: 6px 16px; align-items: baseline; }
+.panel-head h3 { margin: 0; font-family: var(--f-display); font-weight: 600;
+  font-size: var(--t-lg); }
+.strip { display: grid; grid-template-columns: auto minmax(110px, 170px) 1fr 64px;
+  column-gap: 14px; align-items: center; }
+.strip > .row { display: contents; }
+.strip .lab { font-size: var(--t-sm); line-height: 1.2; }
+.strip .lab .key { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3); }
+.track { position: relative; height: 30px; border-bottom: 1px solid var(--rule); }
+.axis { position: relative; height: 18px; }
+.axis span { position: absolute; transform: translateX(-50%); font-size: var(--t-xs);
+  color: var(--ink-3); font-family: var(--f-mono); }
+.gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+.refline { position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1.5px dashed var(--ink-3); }
+.band { position: absolute; top: 11px; height: 8px; border-radius: 4px; opacity: 0.18; }
+.mean { position: absolute; top: 6px; height: 18px; width: 2px; background: var(--ink);
+  transform: translateX(-1px); }
+.dot { position: absolute; top: 10px; width: 10px; height: 10px; border-radius: 50%;
+  transform: translateX(-5px); border: 2px solid var(--sheet); cursor: default; }
+.dot:hover, .dot:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.meanval { text-align: right; font-size: var(--t-sm); }
+@media (max-width: 640px) {
+  .strip { grid-template-columns: auto 1fr 52px; }
+  .strip .lab { display: none; }
+}
+
+/* svg charts */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--ink-3); font-family: var(--f-mono); font-size: 11px; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .axisline { stroke: var(--rule-strong); stroke-width: 1; }
+.series-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--t-sm); }
+.series-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch.dotsw { width: 9px; height: 9px; border-radius: 50%; }
+
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--paper);
+  font-size: var(--t-xs); font-family: var(--f-mono); padding: 6px 8px; border-radius: 4px;
+  z-index: 10; white-space: nowrap; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 28px; }
+.fact { display: grid; gap: 2px; border-top: 1px solid var(--rule-strong); padding-top: 10px; }
+.fact b { font-family: var(--f-mono); font-weight: 500; font-size: var(--t-lg);
+  font-variant-numeric: tabular-nums; }
+ul.notes { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main id="app">
+  <header class="head">
+    <div class="eyebrow" id="eyebrow">pareto-marl · MaMuJoCo Ant-v5</div>
+    <h1>Does the actuator partition matter?</h1>
+    <p class="lede">At a fixed number of agents K, does the way Ant's eight
+      actuators are split between MAPPO agents change the return more than the
+      spread between training seeds?</p>
+  </header>
+  <section class="verdict" id="verdict"></section>
+  <section id="strips"></section>
+  <section id="front"></section>
+  <section id="curves"></section>
+  <section id="table"></section>
+  <section id="method"></section>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const SERIES = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7","--s8"];
+const LEGS = [[0,1,"front-right"],[2,3,"front-left"],[4,5,"back-left"],[6,7,"back-right"]];
+const fmt = (v, d = 0) => v.toLocaleString("en-US", {maximumFractionDigits: d, minimumFractionDigits: d});
+const fmtP = p => p < 0.001 ? p.toExponential(1) : p.toFixed(3);
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (html) e.innerHTML = html;
+  return e;
+};
+
+function chip(key) {
+  const legs = LEGS.map(([a, b, name]) =>
+    `<span class="leg" title="${name}">${[a, b].map(i =>
+      `<span class="cell" style="background:var(${SERIES[+key[i]]})">${key[i]}</span>`
+    ).join("")}</span>`).join("");
+  return `<span class="chip" aria-label="partition ${key}">${legs}</span>`;
+}
+
+const tip = document.getElementById("tip");
+function bindTip(node, text) {
+  const show = e => {
+    tip.textContent = text; tip.hidden = false;
+    const r = node.getBoundingClientRect();
+    tip.style.left = Math.min(r.left + 12, innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = (r.top - tip.offsetHeight - 6) + "px";
+  };
+  node.addEventListener("mouseenter", show);
+  node.addEventListener("focus", show);
+  node.addEventListener("mouseleave", () => tip.hidden = true);
+  node.addEventListener("blur", () => tip.hidden = true);
+}
+
+function renderVerdict() {
+  const v = DATA.verdict, m = DATA.meta, r = DATA.rule;
+  const ks = Object.entries(v.per_k);
+  const passing = ks.filter(([, x]) => x.go).map(([k]) => "K=" + k);
+  const sentence = v.go
+    ? `The partition explains a real share of the return variance at ${passing.join(" and ")}. Searching over partitions has something to find.`
+    : `At neither K does the partition explain enough of the return variance to clear the pre-registered rule. With this many seeds, only K appears to matter.`;
+  const rows = ks.map(([k, x]) => `<tr>
+      <td class="num">K=${k}</td><td class="num r">${x.n_partitions}</td>
+      <td class="num r">${fmt(x.f_stat, 2)}</td><td class="num r">${fmtP(x.p_value)}</td>
+      <td class="num r">${fmt(x.icc, 2)}</td>
+      <td>${x.go ? '<span class="pill go">✓ passes</span>' : '<span class="pill nogo">✕ fails</span>'}</td></tr>`).join("");
+  document.getElementById("verdict").innerHTML = `
+    <div class="verdict-top">
+      <span class="stamp ${v.go ? "go" : "nogo"}">${v.go ? "GO" : "NO-GO"}</span>
+      <p>${sentence}</p>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Agents</th><th class="r">Partitions</th><th class="r">ANOVA F</th>
+        <th class="r">p</th><th class="r">ICC(1)</th><th>Rule</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="small muted">Rule fixed before the run: GO if, for K=2 or K=4, one-way ANOVA
+      over partitions gives p &lt; ${r.p} and ICC(1) ≥ ${r.icc} (at least ${r.icc * 100}% of the
+      eval-return variance comes from the partition). ${m.n_seeds} seeds per partition,
+      ${fmt(m.total_steps / 1e6, 0)}M environment steps each.</p>`;
+}
+
+function domain() {
+  const all = DATA.partitions.flatMap(p => p.returns);
+  const lo = Math.min(0, ...all), hi = Math.max(...all);
+  const step = niceStep((hi - lo) / 5);
+  return [Math.floor(lo / step) * step, Math.ceil(hi / step) * step, step];
+}
+function niceStep(raw) {
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
+}
+
+function renderStrips() {
+  const [lo, hi, step] = domain();
+  const pct = v => ((v - lo) / (hi - lo)) * 100;
+  const single = DATA.partitions.find(p => p.k === 1);
+  const sec = document.getElementById("strips");
+  sec.innerHTML = `<div class="head"><h2>Return by partition</h2>
+    <p class="muted">Each dot is one seed's evaluation return (10 deterministic episodes).
+      The black tick is the mean over seeds; the dashed line is the single-agent mean (K=1).
+      Rows are sorted by mean within each K.</p></div>
+    <div class="legend-chip small muted">${chip("00112233")}<span>actuator cells in leg order:
+      front-right, front-left, back-left, back-right (hip, ankle); colour and digit = agent</span></div>`;
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  const groups = [[2, "K = 2 agents"], [4, "K = 4 agents"], [null, "References"]];
+  for (const [k, title] of groups) {
+    const rows = DATA.partitions
+      .filter(p => k === null ? p.group === "reference" : p.k === k)
+      .sort((a, b) => b.return_mean - a.return_mean);
+    if (!rows.length) continue;
+    const verdictK = k && DATA.verdict.per_k[k];
+    const panel = el("div", {class: "panel"});
+    panel.innerHTML = `<div class="panel-head"><h3>${title}</h3>${verdictK
+      ? `<span class="small muted num">ICC ${fmt(verdictK.icc, 2)} · p ${fmtP(verdictK.p_value)}</span>` : ""}</div>`;
+    const strip = el("div", {class: "strip"});
+    const axis = `<span></span><span class="lab"></span><div class="axis">${ticks.map(t =>
+      `<span style="left:${pct(t)}%">${fmt(t)}</span>`).join("")}</div><span></span>`;
+    strip.insertAdjacentHTML("beforeend", axis);
+    for (const p of rows) {
+      const colour = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+      const sd = p.return_std;
+      const track = el("div", {class: "track"});
+      track.innerHTML = ticks.map(t => `<span class="gridline" style="left:${pct(t)}%"></span>`).join("")
+        + (single ? `<span class="refline" style="left:${pct(single.return_mean)}%"></span>` : "")
+        + `<span class="band" style="left:${pct(p.return_mean - sd)}%;width:${pct(p.return_mean + sd) - pct(p.return_mean - sd)}%;background:${colour}"></span>`
+        + `<span class="mean" style="left:${pct(p.return_mean)}%"></span>`;
+      p.returns.forEach((r, i) => {
+        const d = el("span", {class: "dot", tabindex: "0", style: `left:${pct(r)}%;background:${colour}`});
+        bindTip(d, `${p.x} · seed ${i} · return ${fmt(r)} · v ${fmt(p.velocities[i], 2)} m/s`);
+        track.appendChild(d);
+      });
+      const row = el("div", {class: "row"});
+      row.innerHTML = `<span>${chip(p.x)}</span><span class="lab">${p.label || "random"}<br><span class="key">${p.x}</span></span>`;
+      row.appendChild(track);
+      row.insertAdjacentHTML("beforeend", `<span class="meanval num">${fmt(p.return_mean)}</span>`);
+      strip.appendChild(row);
+    }
+    panel.appendChild(strip);
+    sec.appendChild(panel);
+  }
+}
+
+function svgFrame(w, h, pad) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  s.setAttribute("class", "chart");
+  s.setAttribute("role", "img");
+  return s;
+}
+function linearTicks(lo, hi, n) {
+  const step = niceStep((hi - lo) / n), out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+function axes(svg, xs, ys, sx, sy, W, H, pad, xfmt, yfmt) {
+  let g = "";
+  ys.forEach(v => g += `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${sy(v)}" y2="${sy(v)}"/>
+    <text x="${pad.l - 8}" y="${sy(v) + 4}" text-anchor="end">${yfmt(v)}</text>`);
+  xs.forEach(v => g += `<text x="${sx(v)}" y="${H - pad.b + 18}" text-anchor="middle">${xfmt(v)}</text>`);
+  g += `<line class="axisline" x1="${pad.l}" x2="${W - pad.r}" y1="${H - pad.b}" y2="${H - pad.b}"/>`;
+  svg.insertAdjacentHTML("beforeend", g);
+}
+
+function renderFront() {
+  const P = DATA.partitions, W = 900, H = 380, pad = {l: 64, r: 24, t: 16, b: 44};
+  const xMax = Math.max(...P.map(p => p.actor_params)) * 1.05;
+  const yLo = Math.min(0, ...P.map(p => p.return_mean - p.return_std));
+  const yHi = Math.max(...P.map(p => p.return_mean + p.return_std));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const sec = document.getElementById("front");
+  sec.innerHTML = `<div class="head"><h2>Return against actor size</h2>
+    <p class="muted">Actor parameters (f2) cluster by K because each extra agent adds its own
+      64×64 network; the ranges for different K never overlap. Points are means over seeds,
+      bars are ±1 standard deviation.</p></div>
+    <div class="series-legend"><span><i class="swatch dotsw" style="background:var(--ink)"></i>reference (K=1, K=8)</span>
+      <span><i class="swatch dotsw" style="background:var(--accent)"></i>structured</span>
+      <span><i class="swatch dotsw" style="background:var(--random)"></i>random</span></div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Mean eval return against actor parameter count for every partition");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1000) + "k", v => fmt(v));
+  svg.insertAdjacentHTML("beforeend", `<text x="${W - pad.r}" y="${H - 4}" text-anchor="end">actor parameters</text>`);
+  for (const p of [...P].sort((a, b) => (a.group === "random") - (b.group === "random")).reverse()) {
+    const c = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("tabindex", "0");
+    g.innerHTML = `<line x1="${sx(p.actor_params)}" x2="${sx(p.actor_params)}" y1="${sy(p.return_mean - p.return_std)}"
+        y2="${sy(p.return_mean + p.return_std)}" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      <circle cx="${sx(p.actor_params)}" cy="${sy(p.return_mean)}" r="5.5" fill="${c}" stroke="var(--sheet)" stroke-width="2"/>`;
+    if (p.group !== "random") {
+      g.insertAdjacentHTML("beforeend", `<text x="${sx(p.actor_params) + 9}" y="${sy(p.return_mean) - 8}">${p.x}</text>`);
+    }
+    bindTip(g, `${p.x} · K=${p.k} · ${fmt(p.actor_params)} params · return ${fmt(p.return_mean)} ± ${fmt(p.return_std)}`);
+    svg.appendChild(g);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+}
+
+function renderCurves() {
+  const C = DATA.curves, names = Object.keys(C), W = 900, H = 340, pad = {l: 64, r: 24, t: 16, b: 44};
+  const pts = names.flatMap(n => C[n]);
+  const xMax = DATA.meta.total_steps;
+  const yLo = Math.min(0, ...pts.map(p => p[1])), yHi = Math.max(...pts.map(p => p[1]));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const colour = n => n.startsWith("CleanRL") ? "var(--ink)" : `var(${SERIES[names.indexOf(n)]})`;
+  const sec = document.getElementById("curves");
+  const ck = DATA.cleanrl_check;
+  sec.innerHTML = `<div class="head"><h2>Training curves</h2>
+    <p class="muted">Mean episodic training return in ${fmt(20480 / 1000, 1)}k-step bins, averaged over
+      all runs with the same K (MAPPO) or over the ${DATA.meta.n_cleanrl} CleanRL seeds. Training returns include
+      exploration noise, so they sit below the deterministic evaluation returns.</p></div>
+    <div class="series-legend">${names.map(n => `<span><i class="swatch" style="background:${colour(n)}"></i>${n}</span>`).join("")}</div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Training return over environment steps per K and for CleanRL");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1e6, 1) + "M", v => fmt(v));
+  for (const n of names) {
+    const d = C[n].map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
+    svg.insertAdjacentHTML("beforeend", `<path d="${d}" fill="none" stroke="${colour(n)}" stroke-width="2"
+      stroke-linejoin="round" ${n.startsWith("CleanRL") ? 'stroke-dasharray="5 4"' : ""}/>`);
+    const last = C[n].at(-1);
+    if (last) svg.insertAdjacentHTML("beforeend", `<circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="3.5" fill="${colour(n)}"/>`);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+  sec.insertAdjacentHTML("beforeend", `<div class="facts">
+    <div class="fact"><span class="small muted">MAPPO K=1, last 10% of training</span>
+      <b>${fmt(ck.mappo_k1[0])} <span class="small muted">± ${fmt(ck.mappo_k1[1])}</span></b></div>
+    <div class="fact"><span class="small muted">CleanRL PPO, last 10% of training</span>
+      <b>${fmt(ck.cleanrl[0])} <span class="small muted">± ${fmt(ck.cleanrl[1])}</span></b></div>
+    <div class="fact"><span class="small muted">Welch t-test, K=1 vs CleanRL</span>
+      <b>p = ${fmtP(ck.welch_p)}</b></div></div>
+    <p class="small muted">Sanity check: with one agent, MAPPO should train like CleanRL's PPO on the
+      same budget and batch shape. A large gap here would mean the implementation, not the partition,
+      drives the results.</p>`);
+}
+
+function renderTable() {
+  const rows = [...DATA.partitions].sort((a, b) => a.k - b.k || b.return_mean - a.return_mean);
+  document.getElementById("table").innerHTML = `<div class="head"><h2>All partitions</h2>
+    <p class="muted">Forward velocity separates a walking policy from one that stands still and
+      collects the survival bonus (about 1 per step).</p></div>
+    <div class="panel table-wrap"><table>
+      <thead><tr><th>Partition</th><th>K</th><th>Group</th><th class="r">Actor params</th>
+        <th class="r">Eval return</th><th class="r">± std</th><th class="r">Forward v (m/s)</th>
+        <th class="r">Seeds</th></tr></thead>
+      <tbody>${rows.map(p => `<tr><td>${chip(p.x)} <span class="num small muted">${p.x}</span></td>
+        <td class="num">${p.k}</td><td>${p.label || p.group}</td>
+        <td class="num r">${fmt(p.actor_params)}</td><td class="num r">${fmt(p.return_mean)}</td>
+        <td class="num r">${fmt(p.return_std)}</td><td class="num r">${fmt(p.x_velocity_mean, 2)}</td>
+        <td class="num r">${p.n_seeds}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderMethod() {
+  const m = DATA.meta;
+  const missing = m.n_mappo_expected - m.n_mappo;
+  document.getElementById("method").innerHTML = `<div class="head"><h2>Method and coverage</h2></div>
+    <div class="facts">
+      <div class="fact"><span class="small muted">MAPPO runs</span><b>${m.n_mappo} / ${m.n_mappo_expected}</b></div>
+      <div class="fact"><span class="small muted">CleanRL runs</span><b>${m.n_cleanrl} / ${m.n_seeds}</b></div>
+      <div class="fact"><span class="small muted">Compute</span><b>${m.cpu_hours == null ? "n/a" : fmt(m.cpu_hours, 1) + " CPU-h"}</b></div>
+      <div class="fact"><span class="small muted">Generated</span><b class="small">${m.generated}</b></div>
+    </div>
+    <ul class="notes small">
+      ${missing ? `<li><strong>${missing} MAPPO runs are missing</strong>; ANOVA and ICC use the runs present.</li>` : ""}
+      <li>Design: K=1 and K=8 references; for K=2 four structured splits (front/back, left/right,
+        diagonals, hips/ankles) and eight random ones; for K=4 the per-leg split and eight random ones.
+        Random partitions are drawn uniformly among all partitions with that K.</li>
+      <li>MAPPO: CleanRL's continuous PPO with the actor split into K independent Gaussian actors on
+        local observations (MaMuJoCo, agent_obsk=1), one critic on the full state,
+        per-agent clipped ratios summed over agents. Hyperparameters fixed, not tuned.</li>
+      <li>Evaluation: 10 episodes with the mean action, observation statistics frozen from training.</li>
+      <li>ICC(1) = (MSB − MSW) / (MSB + (n−1)·MSW) with n seeds per partition.</li>
+      <li>Run ${m.run_id} on WCSS Bem2, one CPU core per run.</li>
+    </ul>`;
+  document.getElementById("eyebrow").textContent =
+    `pareto-marl · run ${m.run_id} · MaMuJoCo Ant-v5 · ${m.n_mappo + m.n_cleanrl} training runs`;
+}
+
+renderVerdict(); renderStrips(); renderFront(); renderCurves(); renderTable(); renderMethod();
+</script>

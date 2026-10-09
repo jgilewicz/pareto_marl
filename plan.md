@@ -187,14 +187,17 @@ wall_time_s
   Indeks tasku i → partycja `i // 5`, seed `i % 5` z `configs/design.json`.
 - Brak puli procesów, cache i logiki wznawiania: brakujące wyniki = ponowne
   wysłanie brakujących indeksów (`--array=...`).
-- Python 3.13 zarządzany przez `uv` (bez modułów), venv na PD
-  (`UV_PROJECT_ENVIRONMENT`), budowany na węźle logowania.
+- Grant `hpc-danbor2008-1756464546` (Koło Naukowe Solvro).
+- Python 3.13 zarządzany przez `uv` (bez modułów), venv `.venv` w repo w
+  `$HOME` (PD grantu blisko limitu plików), budowany na węźle logowania.
 - Wyniki: JSON per run do `$TMPDIR`, kopiowane na PD w pułapce `EXIT`.
-- wandb: projekt `marl-partition-moo`, `group = RUN_ID`, run per task
-  (`job_type` = `mappo` lub `cleanrl`). `WANDB_MODE=offline` jeśli węzły nie
-  mają internetu, potem `wandb sync` z węzła logowania.
-- Koszt: 120 tasków × 1 rdzeń × ~1 h ≈ 120 rdzeniogodzin (zmierzyć w smoke
-  teście i poprawić).
+- wandb online (węzły mają internet): projekt `marl-partition-moo`,
+  `group = RUN_ID`, run per task (`job_type` = `mappo` lub `cleanrl`).
+- Koszt (zmierzony w smoke teście na Bem2, 51k kroków: 82 s dla K = 1,
+  89 s dla K = 2, 120 s dla K = 8): 1M kroków ≈ 27–39 min na task,
+  120 tasków ≈ 62 rdzeniogodziny, ściana ≈ 40 min przy wszystkich naraz.
+- Węzeł logowania to VM bez AVX: `import mujoco` tam pada
+  (`Illegal instruction`), na węzłach obliczeniowych działa.
 
 ---
 
@@ -202,10 +205,10 @@ wall_time_s
 
 1. Lokalnie: `just check`, `just smoke` (zmierzone: 2.4–4k SPS na M-series,
    1M kroków ≈ 4–7 min).
-2. WCSS: `uv` + klon w `$HOME`, `just venv <account>`, `preflight.sh`,
-   `just smoke-wcss <account>` (3 taski MAPPO + 1 CleanRL × 50k).
-3. Pełny run: `just submit <account> <run_id>` (115 + 5 tasków).
-4. `just sync`, `just analyze <katalog wyników>` → `verdict.json`,
+2. WCSS: klon w `~/workspace/pareto_marl`, `just venv`, `preflight.sh`,
+   `just smoke-wcss` (3 taski MAPPO + 1 CleanRL × 50k).
+3. Pełny run: `just submit <run_id>` (115 + 5 tasków).
+4. `just analyze <katalog wyników>` → `verdict.json`,
    `partitions.csv`, `front.png`, werdykt GO / NO-GO.
 
 ---
@@ -250,3 +253,29 @@ tensorboard.
 3. Izolacja efektu obserwacji: każdy aktor widzi pełny stan.
 4. Multi-fidelity (successive halving) zamiast stałego T.
 5. Fizyka na GPU (MJX / MuJoCo Playground).
+
+---
+
+## 12. Run v2 (po NO-GO w v1)
+
+v1 (1M kroków, obs 105, 5 seedów): NO-GO, ale polityki słabo wytrenowane
+(v ≈ 0.6 m/s, CleanRL też ~450 zwrotu). v2 powtarza ten sam design i regułę,
+zmienia tylko warunki treningu:
+
+| | v1 | v2 |
+| --- | --- | --- |
+| obserwacja `Ant-v5` | 105 (z siłami kontaktu) | 27 (`include_cfrc_ext_in_observation=False`) |
+| kategorie lokalne MaMuJoCo | domyślne (`cfrc_ext` w głębokości 0) | `[["qpos", "qvel"], ["qpos"]]` |
+| T | 1M | 3M |
+| seedy | 0–4 | 0–9 |
+| taski | 115 + 5 CleanRL | 230 + 10 CleanRL |
+
+f2 w v2 (zakresy dalej rozłączne):
+
+| K | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| f2 min | 6 480 | 11 536 | 16 592 | 21 648 | 26 704 | 31 888 | 37 072 | 42 256 |
+| f2 max | 6 480 | 11 920 | 17 104 | 22 288 | 27 472 | 32 400 | 37 328 | 42 256 |
+
+Weryfikacja: `obs[a] == state()[idx_a]` po 20 krokach i `state()` == obs
+`Ant-v5` bez sił kontaktu, dla 6 partycji. v1 odtwarzalne z commitu `a3d54a7`.

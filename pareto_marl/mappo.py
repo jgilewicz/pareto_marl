@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.distributions.normal import Normal
 
-from pareto_marl.partition import N_ACTUATORS, PartitionSpec
+from pareto_marl.partition import ANT_KWARGS, N_ACTUATORS, PartitionSpec
 
 ENV_ID = "Ant-v5"
 OBS_CLIP = 10.0
@@ -21,7 +21,7 @@ LogFn = Callable[[dict[str, float], int], None]
 
 @dataclass(frozen=True)
 class PPOConfig:
-    total_steps: int = 1_000_000
+    total_steps: int = 3_000_000
     num_envs: int = 8
     num_steps: int = 256
     learning_rate: float = 3e-4
@@ -113,7 +113,7 @@ class Rollout:
 
 def make_env(gamma: float) -> Callable[[], gym.Env]:
     def thunk() -> gym.Env:
-        env = gym.make(ENV_ID)
+        env = gym.make(ENV_ID, **ANT_KWARGS)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env = gym.wrappers.ClipAction(env)
         env = gym.wrappers.NormalizeObservation(env)
@@ -300,7 +300,7 @@ class MAPPOTrainer:
 
     def evaluate(self) -> dict[str, float]:
         rms = obs_normalizer(self.envs.envs[0]).obs_rms
-        env = gym.make(ENV_ID)
+        env = gym.make(ENV_ID, **ANT_KWARGS)
         returns, velocities = [], []
         for ep in range(self.cfg.eval_episodes):
             obs, _ = env.reset(seed=self.seed + EVAL_SEED_OFFSET + ep)

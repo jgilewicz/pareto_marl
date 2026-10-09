@@ -1,0 +1,440 @@
+<title>Does the actuator partition matter?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one lab-notebook column; verdict first, then evidence per K,
+   then the cost/size trade-off, training curves, full table, method. */
+:root {
+  --paper: #f7f8f9;
+  --sheet: #ffffff;
+  --ink: #15191e;
+  --ink-2: #4a525c;
+  --ink-3: #7a838e;
+  --rule: #dfe3e8;
+  --rule-strong: #c3c9d1;
+  --accent: #2a78d6;
+  --random: #9aa3ad;
+  --go: #13804f;
+  --go-bg: #e3f3ea;
+  --nogo: #b8322f;
+  --nogo-bg: #fbe7e6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --chip-ink: #ffffff;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.9375rem; --t-lg: 1.25rem;
+  --t-xl: 1.75rem; --t-2xl: 2.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+    --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+    --accent: #3987e5; --random: #6c7681;
+    --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+  --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+  --accent: #3987e5; --random: #6c7681;
+  --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--f-body);
+  font-size: var(--t-md); line-height: 1.55;
+  padding-inline: 16px; padding-block: 40px 64px;
+}
+main { max-width: 980px; margin-inline: auto; display: grid; gap: 56px; }
+h1, h2 { font-family: var(--f-display); font-weight: 600; text-wrap: balance;
+  margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); line-height: 1.1; }
+h2 { font-size: var(--t-xl); line-height: 1.2; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3);
+  letter-spacing: 0.06em; text-transform: uppercase; }
+.lede { color: var(--ink-2); font-size: var(--t-lg); line-height: 1.45; }
+section { display: grid; gap: 18px; }
+.head { display: grid; gap: 10px; }
+.num { font-variant-numeric: tabular-nums; font-family: var(--f-mono); }
+.muted { color: var(--ink-3); }
+.small { font-size: var(--t-sm); }
+
+/* verdict */
+.verdict { background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 24px; display: grid; gap: 20px; }
+.verdict-top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+.stamp { font-family: var(--f-display); font-weight: 600; font-size: var(--t-xl);
+  padding: 4px 16px; border-radius: 4px; border: 2px solid currentColor;
+  letter-spacing: 0.04em; }
+.stamp.go { color: var(--go); background: var(--go-bg); }
+.stamp.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs);
+  font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.pill.go { color: var(--go); background: var(--go-bg); }
+.pill.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: var(--t-xs);
+  text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+td.r, th.r { text-align: right; }
+
+/* partition chip: 8 actuator cells, grouped by leg */
+.chip { display: inline-flex; gap: 3px; }
+.leg { display: inline-flex; gap: 1px; }
+.cell { width: 13px; height: 17px; border-radius: 2px; font-family: var(--f-mono);
+  font-size: 10px; line-height: 17px; text-align: center; color: var(--chip-ink);
+  font-weight: 500; }
+.legend-chip { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+
+/* strip plot */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 18px 20px; display: grid; gap: 10px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: 6px 16px; align-items: baseline; }
+.panel-head h3 { margin: 0; font-family: var(--f-display); font-weight: 600;
+  font-size: var(--t-lg); }
+.strip { display: grid; grid-template-columns: auto minmax(110px, 170px) 1fr 64px;
+  column-gap: 14px; align-items: center; }
+.strip > .row { display: contents; }
+.strip .lab { font-size: var(--t-sm); line-height: 1.2; }
+.strip .lab .key { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3); }
+.track { position: relative; height: 30px; border-bottom: 1px solid var(--rule); }
+.axis { position: relative; height: 18px; }
+.axis span { position: absolute; transform: translateX(-50%); font-size: var(--t-xs);
+  color: var(--ink-3); font-family: var(--f-mono); }
+.gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+.refline { position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1.5px dashed var(--ink-3); }
+.band { position: absolute; top: 11px; height: 8px; border-radius: 4px; opacity: 0.18; }
+.mean { position: absolute; top: 6px; height: 18px; width: 2px; background: var(--ink);
+  transform: translateX(-1px); }
+.dot { position: absolute; top: 10px; width: 10px; height: 10px; border-radius: 50%;
+  transform: translateX(-5px); border: 2px solid var(--sheet); cursor: default; }
+.dot:hover, .dot:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.meanval { text-align: right; font-size: var(--t-sm); }
+@media (max-width: 640px) {
+  .strip { grid-template-columns: auto 1fr 52px; }
+  .strip .lab { display: none; }
+}
+
+/* svg charts */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--ink-3); font-family: var(--f-mono); font-size: 11px; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .axisline { stroke: var(--rule-strong); stroke-width: 1; }
+.series-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--t-sm); }
+.series-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch.dotsw { width: 9px; height: 9px; border-radius: 50%; }
+
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--paper);
+  font-size: var(--t-xs); font-family: var(--f-mono); padding: 6px 8px; border-radius: 4px;
+  z-index: 10; white-space: nowrap; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 28px; }
+.fact { display: grid; gap: 2px; border-top: 1px solid var(--rule-strong); padding-top: 10px; }
+.fact b { font-family: var(--f-mono); font-weight: 500; font-size: var(--t-lg);
+  font-variant-numeric: tabular-nums; }
+ul.notes { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main id="app">
+  <header class="head">
+    <div class="eyebrow" id="eyebrow">pareto-marl · MaMuJoCo Ant-v5</div>
+    <h1>Does the actuator partition matter?</h1>
+    <p class="lede">At a fixed number of agents K, does the way Ant's eight
+      actuators are split between MAPPO agents change the return more than the
+      spread between training seeds?</p>
+  </header>
+  <section class="verdict" id="verdict"></section>
+  <section id="strips"></section>
+  <section id="front"></section>
+  <section id="curves"></section>
+  <section id="table"></section>
+  <section id="method"></section>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = {"meta":{"run_id":"v1","total_steps":1000000,"n_mappo":115,"n_mappo_expected":115,"n_cleanrl":5,"n_seeds":5,"cpu_hours":43.8,"generated":"2026-10-09 02:34 UTC"},"rule":{"p":0.05,"icc":0.2},"verdict":{"go":false,"per_k":{"2":{"n_partitions":12,"p_value":0.10152575972762083,"f_stat":1.7021801387407052,"icc":0.12314239846091164,"go":false},"4":{"n_partitions":9,"p_value":0.40531033693027985,"f_stat":1.0699243861556713,"icc":0.013791997834644824,"go":false}}},"cleanrl_check":{"mappo_k1":[446.60440328691254,98.99875071994354],"cleanrl":[452.1329713277081,35.80863512691638],"welch_p":0.9204124843050789},"partitions":[{"x":"00000000","k":1,"group":"reference","label":"single agent","actor_params":11472,"n_seeds":5,"return_mean":593.284915670656,"return_std":129.13235643701958,"x_velocity_mean":0.6562975723362762,"returns":[531.6,447.9,797.0,606.3,583.7],"velocities":[0.552,0.67,0.6,0.614,0.845]},{"x":"00000011","k":2,"group":"random","label":"","actor_params":17040,"n_seeds":5,"return_mean":522.3739120399644,"return_std":176.3010183581428,"x_velocity_mean":0.6670113275948323,"returns":[375.4,757.4,664.9,389.7,424.4],"velocities":[0.509,1.244,0.852,0.395,0.335]},{"x":"00000101","k":2,"group":"random","label":"","actor_params":17424,"n_seeds":5,"return_mean":571.0286197899028,"return_std":110.0749552050639,"x_velocity_mean":0.6326026308057285,"returns":[755.8,503.4,585.2,483.9,527.0],"velocities":[0.691,0.739,0.618,0.692,0.423]},{"x":"00001010","k":2,"group":"random","label":"","actor_params":17936,"n_seeds":5,"return_mean":447.8261682373468,"return_std":212.67622836232806,"x_velocity_mean":0.594968165477974,"returns":[433.7,616.4,570.5,531.7,86.9],"velocities":[0.504,0.14,0.483,0.816,1.033]},{"x":"00100010","k":2,"group":"random","label":"","actor_params":17936,"n_seeds":5,"return_mean":463.06909076610646,"return_std":261.05853316072324,"x_velocity_mean":0.6441318438025652,"returns":[65.2,560.4,342.4,701.5,645.9],"velocities":[0.708,0.183,0.638,0.894,0.798]},{"x":"00100110","k":2,"group":"random","label":"","actor_params":18384,"n_seeds":5,"return_mean":391.5691882676264,"return_std":148.7261796009391,"x_velocity_mean":0.5378136927772766,"returns":[549.4,260.9,274.8,556.5,316.3],"velocities":[0.181,0.754,0.572,0.665,0.517]},{"x":"01000000","k":2,"group":"random","label":"","actor_params":16912,"n_seeds":5,"return_mean":767.7657840239052,"return_std":260.2205606142648,"x_velocity_mean":0.7940577564302389,"returns":[916.5,1101.9,652.9,751.4,416.1],"velocities":[0.759,1.143,0.669,0.702,0.697]},{"x":"01001110","k":2,"group":"random","label":"","actor_params":17936,"n_seeds":5,"return_mean":442.0777074706517,"return_std":153.78374138039487,"x_velocity_mean":0.55656698165179,"returns":[423.3,240.3,641.5,370.4,534.9],"velocities":[0.627,0.556,0.434,0.586,0.58]},{"x":"01100111","k":2,"group":"random","label":"","actor_params":18384,"n_seeds":5,"return_mean":379.5484007612877,"return_std":196.92946220499152,"x_velocity_mean":0.5978127081384803,"returns":[360.8,289.7,708.1,354.8,184.3],"velocities":[0.302,0.437,0.784,0.711,0.755]},{"x":"00001111","k":2,"group":"structured","label":"front / back","actor_params":17040,"n_seeds":5,"return_mean":640.7552938548156,"return_std":284.4039200712378,"x_velocity_mean":0.9268365096197737,"returns":[504.5,1097.8,332.4,613.0,656.0],"velocities":[0.847,1.423,0.737,0.585,1.041]},{"x":"00110011","k":2,"group":"structured","label":"diagonals","actor_params":17040,"n_seeds":5,"return_mean":429.28332994858204,"return_std":137.4364101447558,"x_velocity_mean":0.727416687103769,"returns":[480.8,602.4,481.6,320.9,260.7],"velocities":[0.946,0.575,0.545,0.752,0.819]},{"x":"00111100","k":2,"group":"structured","label":"left / right","actor_params":17040,"n_seeds":5,"return_mean":433.28681829569433,"return_std":209.71432262486908,"x_velocity_mean":0.7276975355469423,"returns":[421.5,359.6,778.2,397.7,209.5],"velocities":[0.679,0.6,0.899,0.785,0.675]},{"x":"01010101","k":2,"group":"structured","label":"hips / ankles","actor_params":18448,"n_seeds":5,"return_mean":457.6624992813495,"return_std":41.00846018939127,"x_velocity_mean":0.5455013009224807,"returns":[419.8,511.0,443.9,490.4,423.2],"velocities":[0.776,0.308,0.482,0.479,0.683]},{"x":"01020131","k":4,"group":"random","label":"","actor_params":28944,"n_seeds":5,"return_mean":290.23165007716227,"return_std":127.91142815694657,"x_velocity_mean":0.5471928013445637,"returns":[436.8,141.6,199.1,268.9,404.7],"velocities":[0.199,0.731,0.729,0.589,0.488]},{"x":"01200023","k":4,"group":"random","label":"","actor_params":28368,"n_seeds":5,"return_mean":557.7499599265454,"return_std":232.2554314275005,"x_velocity_mean":0.6192030920017654,"returns":[446.4,733.8,515.2,838.5,254.9],"velocities":[0.483,0.788,0.357,0.771,0.696]},{"x":"01200321","k":4,"group":"random","label":"","actor_params":28880,"n_seeds":5,"return_mean":363.662037124597,"return_std":104.18578038298274,"x_velocity_mean":0.5509232276910002,"returns":[382.6,536.3,282.9,325.7,290.8],"velocities":[0.524,0.752,0.692,0.508,0.279]},{"x":"01203221","k":4,"group":"random","label":"","actor_params":29456,"n_seeds":5,"return_mean":452.955242475812,"return_std":265.81591952706304,"x_velocity_mean":0.5610315810603338,"returns":[297.9,226.7,693.5,787.6,259.1],"velocities":[0.406,0.397,0.856,0.699,0.448]},{"x":"01211123","k":4,"group":"random","label":"","actor_params":28944,"n_seeds":5,"return_mean":312.23647151916407,"return_std":106.61648886425336,"x_velocity_mean":0.5062399216357558,"returns":[427.9,208.7,371.6,364.0,189.0],"velocities":[0.3,0.411,0.498,0.699,0.624]},{"x":"01213132","k":4,"group":"random","label":"","actor_params":29520,"n_seeds":5,"return_mean":446.0517983304297,"return_std":171.6416532758734,"x_velocity_mean":0.302347826913436,"returns":[585.9,506.6,578.8,175.8,383.1],"velocities":[0.165,0.487,0.179,0.424,0.256]},{"x":"01223012","k":4,"group":"random","label":"","actor_params":29520,"n_seeds":5,"return_mean":454.9603983771946,"return_std":263.65942233572247,"x_velocity_mean":0.4460430191577518,"returns":[883.4,245.2,532.8,292.0,321.3],"velocities":[0.493,0.577,0.287,0.41,0.463]},{"x":"01232032","k":4,"group":"random","label":"","actor_params":29392,"n_seeds":5,"return_mean":401.770389429365,"return_std":117.87686596396213,"x_velocity_mean":0.5596686939263906,"returns":[600.6,382.3,287.2,354.6,384.1],"velocities":[0.305,0.661,0.598,0.673,0.562]},{"x":"00112233","k":4,"group":"structured","label":"agent per leg","actor_params":28176,"n_seeds":5,"return_mean":561.12502735591,"return_std":331.6323657690896,"x_velocity_mean":0.8132739001079827,"returns":[1113.5,260.2,595.3,384.8,451.8],"velocities":[1.001,1.174,0.807,0.284,0.799]},{"x":"01234567","k":8,"group":"reference","label":"agent per joint","actor_params":49936,"n_seeds":5,"return_mean":404.02618463243135,"return_std":180.55717687384742,"x_velocity_mean":0.5158616270075037,"returns":[200.0,692.7,413.5,335.0,379.0],"velocities":[0.706,0.396,0.707,0.516,0.254]}],"curves":{"MAPPO K=1":[[20480,-84.0],[40960,-97.7],[61440,-83.4],[81920,-74.6],[102400,-64.6],[122880,-49.5],[143360,-41.9],[163840,-36.9],[184320,-31.0],[204800,-19.0],[225280,-12.8],[245760,-1.7],[266240,7.4],[286720,14.2],[307200,33.9],[327680,44.9],[348160,64.8],[368640,73.3],[389120,87.2],[409600,107.1],[430080,119.5],[450560,143.8],[471040,143.8],[491520,178.8],[512000,186.1],[532480,198.8],[552960,212.4],[573440,227.8],[593920,247.8],[614400,251.5],[634880,294.0],[655360,283.7],[675840,303.1],[696320,316.6],[716800,338.9],[737280,327.9],[757760,359.4],[778240,358.6],[798720,361.5],[819200,422.3],[839680,434.9],[860160,376.9],[880640,420.0],[901120,426.9],[921600,419.2],[942080,419.0],[962560,473.4],[983040,475.6]],"MAPPO K=2":[[20480,-91.4],[40960,-92.6],[61440,-76.7],[81920,-60.8],[102400,-48.8],[122880,-38.5],[143360,-30.0],[163840,-19.6],[184320,-9.4],[204800,2.2],[225280,15.8],[245760,32.3],[266240,48.6],[286720,67.3],[307200,84.8],[327680,104.8],[348160,121.7],[368640,136.3],[389120,154.8],[409600,167.5],[430080,187.2],[450560,194.1],[471040,215.6],[491520,216.6],[512000,235.0],[532480,240.9],[552960,259.2],[573440,271.2],[593920,277.7],[614400,296.6],[634880,305.6],[655360,316.4],[675840,323.6],[696320,329.7],[716800,331.4],[737280,338.3],[757760,344.4],[778240,350.9],[798720,355.5],[819200,362.5],[839680,369.7],[860160,387.3],[880640,370.1],[901120,391.2],[921600,402.1],[942080,405.7],[962560,393.5],[983040,412.2]],"MAPPO K=4":[[20480,-90.6],[40960,-90.3],[61440,-68.6],[81920,-57.2],[102400,-46.9],[122880,-34.6],[143360,-22.2],[163840,-8.3],[184320,6.8],[204800,23.6],[225280,43.3],[245760,64.5],[266240,86.7],[286720,105.2],[307200,127.4],[327680,146.2],[348160,159.3],[368640,181.9],[389120,189.0],[409600,208.9],[430080,212.6],[450560,230.3],[471040,239.8],[491520,264.5],[512000,264.8],[532480,265.3],[552960,282.4],[573440,293.0],[593920,283.4],[614400,297.6],[634880,287.8],[655360,309.8],[675840,310.7],[696320,310.6],[716800,318.8],[737280,319.5],[757760,341.3],[778240,340.3],[798720,346.8],[819200,364.2],[839680,334.9],[860160,340.4],[880640,352.3],[901120,343.4],[921600,340.8],[942080,356.0],[962560,362.9],[983040,364.3]],"MAPPO K=8":[[20480,-94.0],[40960,-115.7],[61440,-86.7],[81920,-74.8],[102400,-60.3],[122880,-44.6],[143360,-17.0],[163840,8.2],[184320,45.3],[204800,66.4],[225280,92.8],[245760,109.7],[266240,124.1],[286720,147.7],[307200,179.8],[327680,200.5],[348160,198.5],[368640,213.9],[389120,265.4],[409600,284.1],[430080,266.3],[450560,273.3],[471040,303.6],[491520,278.0],[512000,333.1],[532480,370.2],[552960,322.7],[573440,326.2],[593920,326.1],[614400,346.2],[634880,343.7],[655360,349.5],[675840,346.9],[696320,325.8],[716800,344.4],[737280,320.2],[757760,313.9],[778240,363.2],[798720,369.2],[819200,409.6],[839680,344.7],[860160,394.4],[880640,357.4],[901120,400.1],[921600,363.3],[942080,347.8],[962560,389.1],[983040,391.0]],"CleanRL PPO":[[20480,-84.0],[40960,-102.0],[61440,-78.0],[81920,-76.1],[102400,-61.9],[122880,-50.7],[143360,-41.4],[163840,-34.3],[184320,-27.3],[204800,-16.7],[225280,-10.7],[245760,-0.0],[266240,13.7],[286720,29.3],[307200,44.1],[327680,62.4],[348160,90.6],[368640,94.1],[389120,137.9],[409600,150.9],[430080,152.6],[450560,175.6],[471040,178.2],[491520,189.2],[512000,204.6],[532480,254.5],[552960,268.9],[573440,271.5],[593920,284.5],[614400,294.9],[634880,316.9],[655360,335.8],[675840,337.4],[696320,334.8],[716800,348.5],[737280,385.0],[757760,381.7],[778240,386.0],[798720,410.6],[819200,369.7],[839680,370.9],[860160,449.2],[880640,409.4],[901120,410.1],[921600,426.8],[942080,443.6],[962560,472.5],[983040,469.8]]}};
+const SERIES = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7","--s8"];
+const LEGS = [[0,1,"front-right"],[2,3,"front-left"],[4,5,"back-left"],[6,7,"back-right"]];
+const fmt = (v, d = 0) => v.toLocaleString("en-US", {maximumFractionDigits: d, minimumFractionDigits: d});
+const fmtP = p => p < 0.001 ? p.toExponential(1) : p.toFixed(3);
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (html) e.innerHTML = html;
+  return e;
+};
+
+function chip(key) {
+  const legs = LEGS.map(([a, b, name]) =>
+    `<span class="leg" title="${name}">${[a, b].map(i =>
+      `<span class="cell" style="background:var(${SERIES[+key[i]]})">${key[i]}</span>`
+    ).join("")}</span>`).join("");
+  return `<span class="chip" aria-label="partition ${key}">${legs}</span>`;
+}
+
+const tip = document.getElementById("tip");
+function bindTip(node, text) {
+  const show = e => {
+    tip.textContent = text; tip.hidden = false;
+    const r = node.getBoundingClientRect();
+    tip.style.left = Math.min(r.left + 12, innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = (r.top - tip.offsetHeight - 6) + "px";
+  };
+  node.addEventListener("mouseenter", show);
+  node.addEventListener("focus", show);
+  node.addEventListener("mouseleave", () => tip.hidden = true);
+  node.addEventListener("blur", () => tip.hidden = true);
+}
+
+function renderVerdict() {
+  const v = DATA.verdict, m = DATA.meta, r = DATA.rule;
+  const ks = Object.entries(v.per_k);
+  const passing = ks.filter(([, x]) => x.go).map(([k]) => "K=" + k);
+  const sentence = v.go
+    ? `The partition explains a real share of the return variance at ${passing.join(" and ")}. Searching over partitions has something to find.`
+    : `At neither K does the partition explain enough of the return variance to clear the pre-registered rule. With this many seeds, only K appears to matter.`;
+  const rows = ks.map(([k, x]) => `<tr>
+      <td class="num">K=${k}</td><td class="num r">${x.n_partitions}</td>
+      <td class="num r">${fmt(x.f_stat, 2)}</td><td class="num r">${fmtP(x.p_value)}</td>
+      <td class="num r">${fmt(x.icc, 2)}</td>
+      <td>${x.go ? '<span class="pill go">✓ passes</span>' : '<span class="pill nogo">✕ fails</span>'}</td></tr>`).join("");
+  document.getElementById("verdict").innerHTML = `
+    <div class="verdict-top">
+      <span class="stamp ${v.go ? "go" : "nogo"}">${v.go ? "GO" : "NO-GO"}</span>
+      <p>${sentence}</p>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Agents</th><th class="r">Partitions</th><th class="r">ANOVA F</th>
+        <th class="r">p</th><th class="r">ICC(1)</th><th>Rule</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="small muted">Rule fixed before the run: GO if, for K=2 or K=4, one-way ANOVA
+      over partitions gives p &lt; ${r.p} and ICC(1) ≥ ${r.icc} (at least ${r.icc * 100}% of the
+      eval-return variance comes from the partition). ${m.n_seeds} seeds per partition,
+      ${fmt(m.total_steps / 1e6, 0)}M environment steps each.</p>`;
+}
+
+function domain() {
+  const all = DATA.partitions.flatMap(p => p.returns);
+  const lo = Math.min(0, ...all), hi = Math.max(...all);
+  const step = niceStep((hi - lo) / 5);
+  return [Math.floor(lo / step) * step, Math.ceil(hi / step) * step, step];
+}
+function niceStep(raw) {
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
+}
+
+function renderStrips() {
+  const [lo, hi, step] = domain();
+  const pct = v => ((v - lo) / (hi - lo)) * 100;
+  const single = DATA.partitions.find(p => p.k === 1);
+  const sec = document.getElementById("strips");
+  sec.innerHTML = `<div class="head"><h2>Return by partition</h2>
+    <p class="muted">Each dot is one seed's evaluation return (10 deterministic episodes).
+      The black tick is the mean over seeds; the dashed line is the single-agent mean (K=1).
+      Rows are sorted by mean within each K.</p></div>
+    <div class="legend-chip small muted">${chip("00112233")}<span>actuator cells in leg order:
+      front-right, front-left, back-left, back-right (hip, ankle); colour and digit = agent</span></div>`;
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  const groups = [[2, "K = 2 agents"], [4, "K = 4 agents"], [null, "References"]];
+  for (const [k, title] of groups) {
+    const rows = DATA.partitions
+      .filter(p => k === null ? p.group === "reference" : p.k === k)
+      .sort((a, b) => b.return_mean - a.return_mean);
+    if (!rows.length) continue;
+    const verdictK = k && DATA.verdict.per_k[k];
+    const panel = el("div", {class: "panel"});
+    panel.innerHTML = `<div class="panel-head"><h3>${title}</h3>${verdictK
+      ? `<span class="small muted num">ICC ${fmt(verdictK.icc, 2)} · p ${fmtP(verdictK.p_value)}</span>` : ""}</div>`;
+    const strip = el("div", {class: "strip"});
+    const axis = `<span></span><span class="lab"></span><div class="axis">${ticks.map(t =>
+      `<span style="left:${pct(t)}%">${fmt(t)}</span>`).join("")}</div><span></span>`;
+    strip.insertAdjacentHTML("beforeend", axis);
+    for (const p of rows) {
+      const colour = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+      const sd = p.return_std;
+      const track = el("div", {class: "track"});
+      track.innerHTML = ticks.map(t => `<span class="gridline" style="left:${pct(t)}%"></span>`).join("")
+        + (single ? `<span class="refline" style="left:${pct(single.return_mean)}%"></span>` : "")
+        + `<span class="band" style="left:${pct(p.return_mean - sd)}%;width:${pct(p.return_mean + sd) - pct(p.return_mean - sd)}%;background:${colour}"></span>`
+        + `<span class="mean" style="left:${pct(p.return_mean)}%"></span>`;
+      p.returns.forEach((r, i) => {
+        const d = el("span", {class: "dot", tabindex: "0", style: `left:${pct(r)}%;background:${colour}`});
+        bindTip(d, `${p.x} · seed ${i} · return ${fmt(r)} · v ${fmt(p.velocities[i], 2)} m/s`);
+        track.appendChild(d);
+      });
+      const row = el("div", {class: "row"});
+      row.innerHTML = `<span>${chip(p.x)}</span><span class="lab">${p.label || "random"}<br><span class="key">${p.x}</span></span>`;
+      row.appendChild(track);
+      row.insertAdjacentHTML("beforeend", `<span class="meanval num">${fmt(p.return_mean)}</span>`);
+      strip.appendChild(row);
+    }
+    panel.appendChild(strip);
+    sec.appendChild(panel);
+  }
+}
+
+function svgFrame(w, h, pad) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  s.setAttribute("class", "chart");
+  s.setAttribute("role", "img");
+  return s;
+}
+function linearTicks(lo, hi, n) {
+  const step = niceStep((hi - lo) / n), out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+function axes(svg, xs, ys, sx, sy, W, H, pad, xfmt, yfmt) {
+  let g = "";
+  ys.forEach(v => g += `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${sy(v)}" y2="${sy(v)}"/>
+    <text x="${pad.l - 8}" y="${sy(v) + 4}" text-anchor="end">${yfmt(v)}</text>`);
+  xs.forEach(v => g += `<text x="${sx(v)}" y="${H - pad.b + 18}" text-anchor="middle">${xfmt(v)}</text>`);
+  g += `<line class="axisline" x1="${pad.l}" x2="${W - pad.r}" y1="${H - pad.b}" y2="${H - pad.b}"/>`;
+  svg.insertAdjacentHTML("beforeend", g);
+}
+
+function renderFront() {
+  const P = DATA.partitions, W = 900, H = 380, pad = {l: 64, r: 24, t: 16, b: 44};
+  const xMax = Math.max(...P.map(p => p.actor_params)) * 1.05;
+  const yLo = Math.min(0, ...P.map(p => p.return_mean - p.return_std));
+  const yHi = Math.max(...P.map(p => p.return_mean + p.return_std));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const sec = document.getElementById("front");
+  sec.innerHTML = `<div class="head"><h2>Return against actor size</h2>
+    <p class="muted">Actor parameters (f2) cluster by K because each extra agent adds its own
+      64×64 network; the ranges for different K never overlap. Points are means over seeds,
+      bars are ±1 standard deviation.</p></div>
+    <div class="series-legend"><span><i class="swatch dotsw" style="background:var(--ink)"></i>reference (K=1, K=8)</span>
+      <span><i class="swatch dotsw" style="background:var(--accent)"></i>structured</span>
+      <span><i class="swatch dotsw" style="background:var(--random)"></i>random</span></div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Mean eval return against actor parameter count for every partition");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1000) + "k", v => fmt(v));
+  svg.insertAdjacentHTML("beforeend", `<text x="${W - pad.r}" y="${H - 4}" text-anchor="end">actor parameters</text>`);
+  for (const p of [...P].sort((a, b) => (a.group === "random") - (b.group === "random")).reverse()) {
+    const c = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("tabindex", "0");
+    g.innerHTML = `<line x1="${sx(p.actor_params)}" x2="${sx(p.actor_params)}" y1="${sy(p.return_mean - p.return_std)}"
+        y2="${sy(p.return_mean + p.return_std)}" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      <circle cx="${sx(p.actor_params)}" cy="${sy(p.return_mean)}" r="5.5" fill="${c}" stroke="var(--sheet)" stroke-width="2"/>`;
+    if (p.group !== "random") {
+      g.insertAdjacentHTML("beforeend", `<text x="${sx(p.actor_params) + 9}" y="${sy(p.return_mean) - 8}">${p.x}</text>`);
+    }
+    bindTip(g, `${p.x} · K=${p.k} · ${fmt(p.actor_params)} params · return ${fmt(p.return_mean)} ± ${fmt(p.return_std)}`);
+    svg.appendChild(g);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+}
+
+function renderCurves() {
+  const C = DATA.curves, names = Object.keys(C), W = 900, H = 340, pad = {l: 64, r: 24, t: 16, b: 44};
+  const pts = names.flatMap(n => C[n]);
+  const xMax = DATA.meta.total_steps;
+  const yLo = Math.min(0, ...pts.map(p => p[1])), yHi = Math.max(...pts.map(p => p[1]));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const colour = n => n.startsWith("CleanRL") ? "var(--ink)" : `var(${SERIES[names.indexOf(n)]})`;
+  const sec = document.getElementById("curves");
+  const ck = DATA.cleanrl_check;
+  sec.innerHTML = `<div class="head"><h2>Training curves</h2>
+    <p class="muted">Mean episodic training return in ${fmt(20480 / 1000, 1)}k-step bins, averaged over
+      all runs with the same K (MAPPO) or over the five CleanRL seeds. Training returns include
+      exploration noise, so they sit below the deterministic evaluation returns.</p></div>
+    <div class="series-legend">${names.map(n => `<span><i class="swatch" style="background:${colour(n)}"></i>${n}</span>`).join("")}</div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Training return over environment steps per K and for CleanRL");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1e6, 1) + "M", v => fmt(v));
+  for (const n of names) {
+    const d = C[n].map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
+    svg.insertAdjacentHTML("beforeend", `<path d="${d}" fill="none" stroke="${colour(n)}" stroke-width="2"
+      stroke-linejoin="round" ${n.startsWith("CleanRL") ? 'stroke-dasharray="5 4"' : ""}/>`);
+    const last = C[n].at(-1);
+    if (last) svg.insertAdjacentHTML("beforeend", `<circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="3.5" fill="${colour(n)}"/>`);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+  sec.insertAdjacentHTML("beforeend", `<div class="facts">
+    <div class="fact"><span class="small muted">MAPPO K=1, last 10% of training</span>
+      <b>${fmt(ck.mappo_k1[0])} <span class="small muted">± ${fmt(ck.mappo_k1[1])}</span></b></div>
+    <div class="fact"><span class="small muted">CleanRL PPO, last 10% of training</span>
+      <b>${fmt(ck.cleanrl[0])} <span class="small muted">± ${fmt(ck.cleanrl[1])}</span></b></div>
+    <div class="fact"><span class="small muted">Welch t-test, K=1 vs CleanRL</span>
+      <b>p = ${fmtP(ck.welch_p)}</b></div></div>
+    <p class="small muted">Sanity check: with one agent, MAPPO should train like CleanRL's PPO on the
+      same budget and batch shape. A large gap here would mean the implementation, not the partition,
+      drives the results.</p>`);
+}
+
+function renderTable() {
+  const rows = [...DATA.partitions].sort((a, b) => a.k - b.k || b.return_mean - a.return_mean);
+  document.getElementById("table").innerHTML = `<div class="head"><h2>All partitions</h2>
+    <p class="muted">Forward velocity separates a walking policy from one that stands still and
+      collects the survival bonus (about 1 per step).</p></div>
+    <div class="panel table-wrap"><table>
+      <thead><tr><th>Partition</th><th>K</th><th>Group</th><th class="r">Actor params</th>
+        <th class="r">Eval return</th><th class="r">± std</th><th class="r">Forward v (m/s)</th>
+        <th class="r">Seeds</th></tr></thead>
+      <tbody>${rows.map(p => `<tr><td>${chip(p.x)} <span class="num small muted">${p.x}</span></td>
+        <td class="num">${p.k}</td><td>${p.label || p.group}</td>
+        <td class="num r">${fmt(p.actor_params)}</td><td class="num r">${fmt(p.return_mean)}</td>
+        <td class="num r">${fmt(p.return_std)}</td><td class="num r">${fmt(p.x_velocity_mean, 2)}</td>
+        <td class="num r">${p.n_seeds}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderMethod() {
+  const m = DATA.meta;
+  const missing = m.n_mappo_expected - m.n_mappo;
+  document.getElementById("method").innerHTML = `<div class="head"><h2>Method and coverage</h2></div>
+    <div class="facts">
+      <div class="fact"><span class="small muted">MAPPO runs</span><b>${m.n_mappo} / ${m.n_mappo_expected}</b></div>
+      <div class="fact"><span class="small muted">CleanRL runs</span><b>${m.n_cleanrl} / ${m.n_seeds}</b></div>
+      <div class="fact"><span class="small muted">Compute</span><b>${m.cpu_hours == null ? "n/a" : fmt(m.cpu_hours, 1) + " CPU-h"}</b></div>
+      <div class="fact"><span class="small muted">Generated</span><b class="small">${m.generated}</b></div>
+    </div>
+    <ul class="notes small">
+      ${missing ? `<li><strong>${missing} MAPPO runs are missing</strong>; ANOVA and ICC use the runs present.</li>` : ""}
+      <li>Design: K=1 and K=8 references; for K=2 four structured splits (front/back, left/right,
+        diagonals, hips/ankles) and eight random ones; for K=4 the per-leg split and eight random ones.
+        Random partitions are drawn uniformly among all partitions with that K.</li>
+      <li>MAPPO: CleanRL's continuous PPO with the actor split into K independent Gaussian actors on
+        local observations (MaMuJoCo, agent_obsk=1), one critic on the full 105-dim state,
+        per-agent clipped ratios summed over agents. Hyperparameters fixed, not tuned.</li>
+      <li>Evaluation: 10 episodes with the mean action, observation statistics frozen from training.</li>
+      <li>ICC(1) = (MSB − MSW) / (MSB + (n−1)·MSW) with n seeds per partition.</li>
+      <li>Run ${m.run_id} on WCSS Bem2, one CPU core per run.</li>
+    </ul>`;
+  document.getElementById("eyebrow").textContent =
+    `pareto-marl · run ${m.run_id} · MaMuJoCo Ant-v5 · ${m.n_mappo + m.n_cleanrl} training runs`;
+}
+
+renderVerdict(); renderStrips(); renderFront(); renderCurves(); renderTable(); renderMethod();
+</script>

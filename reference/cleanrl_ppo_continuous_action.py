@@ -1,7 +1,8 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_actionpy
 # CleanRL ppo_continuous_action.py @ 35896b1fef, ported to gymnasium 1.x:
 # TransformObservation space arg, SAME_STEP autoreset, vector episode info,
-# wandb group/job_type, learning curve written to --curve-path as JSON.
+# wandb group/job_type, learning curve written to --curve-path as JSON,
+# contact forces left out of the observation (as in pareto_marl).
 import json
 import os
 import random
@@ -98,7 +99,7 @@ def make_env(env_id, idx, capture_video, run_name, gamma):
             env = gym.make(env_id, render_mode="rgb_array")
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = gym.make(env_id, include_cfrc_ext_in_observation=False)
         env = gym.wrappers.FlattenObservation(
             env
         )  # deal with dm_control's Dict observation space
