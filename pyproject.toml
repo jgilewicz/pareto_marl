@@ -10,7 +10,6 @@ dependencies = [
     "gymnasium-robotics==1.4.2",
     "jax==0.11.2; sys_platform == 'darwin'",
     "jax[cuda12]==0.11.2; sys_platform == 'linux'",
-    "jinja2==3.1.6",
     "matplotlib==3.11.2",
     "mujoco==3.15.0",
     "mujoco-mjx==3.15.0",
