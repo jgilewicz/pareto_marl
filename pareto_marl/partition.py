@@ -10,10 +10,14 @@ import numpy as np
 with contextlib.redirect_stderr(io.StringIO()):
     from gymnasium_robotics import mamujoco_v1
     from gymnasium_robotics.envs.multiagent_mujoco.obsk import (
+        HyperEdge,
+        Node,
         get_parts_and_edges,
     )
 
 N_ACTUATORS = 8
+# ManySegmentAnt actuators per segment, XML order: hip1, ankle1, hip2, ankle2
+SEGMENT_ACTUATORS = 4
 HIDDEN = 64
 # contact forces (78 of 105 dims) are left out of every observation
 ANT_KWARGS: dict[str, Any] = {"include_cfrc_ext_in_observation": False}
@@ -80,22 +84,78 @@ def mlp_params(obs_dim: int, act_dim: int) -> int:
     return first + second + head + log_std
 
 
-def make_ma_env(x: Partition, obsk: int = 1) -> Any:
-    parts, edges, globals_ = get_parts_and_edges("Ant", None)
-    nodes = list(parts[0])
+def structured_partitions(n_segs: int) -> dict[str, Partition]:
+    m = SEGMENT_ACTUATORS * n_segs
+    return {
+        "single": tuple(0 for _ in range(m)),
+        "segment": tuple(i // SEGMENT_ACTUATORS for i in range(m)),
+        "leg": tuple(i // 2 for i in range(m)),
+        "joint": tuple(range(m)),
+    }
+
+
+def many_segment_graph(
+    n_segs: int,
+) -> tuple[list[Node], list[HyperEdge], list[Node]]:
+    parts, edges, globals_ = get_parts_and_edges(
+        "ManySegmentAnt", f"{n_segs}x1"
+    )
+    nodes = [node for part in parts for node in part]
+    # gymnasium-robotics 1.4.2 bugs: qpos/qvel ids of all but the last segment
+    # point into the root joint, act_ids swap the two legs of a segment, and
+    # inter-segment edges hold deepcopies (one-way, duplicated neighbours)
+    for i, node in enumerate(nodes):
+        segment, joint = divmod(i, SEGMENT_ACTUATORS)
+        node.qpos_ids = node.qvel_ids = (
+            -SEGMENT_ACTUATORS * (n_segs - segment) + joint
+        )
+        node.act_ids = i
+    by_label = {node.label: node for node in nodes}
+    edges = [HyperEdge(*(by_label[n.label] for n in e.nodes)) for e in edges]
+    return nodes, edges, globals_
+
+
+def _factorization(
+    nodes: list[Node],
+    edges: list[HyperEdge],
+    globals_: list[Node],
+    x: Partition,
+) -> dict[str, Any]:
     blocks = [
-        tuple(nodes[i] for i in range(N_ACTUATORS) if x[i] == k)
+        tuple(nodes[i] for i in range(len(x)) if x[i] == k)
         for k in range(n_blocks(x))
     ]
-    factorization = {"partition": blocks, "edges": edges, "globals": globals_}
+    return {"partition": blocks, "edges": edges, "globals": globals_}
+
+
+def _parallel_env(
+    scenario: str, conf: str, factorization: dict[str, Any], obsk: int
+) -> Any:
     return mamujoco_v1.parallel_env(
-        "Ant",
-        "custom",
+        scenario,
+        conf,
         agent_obsk=obsk,
         agent_factorization=factorization,
         local_categories=LOCAL_CATEGORIES,
         **ANT_KWARGS,
     )
+
+
+def make_ma_env(x: Partition, obsk: int = 1) -> Any:
+    parts, edges, globals_ = get_parts_and_edges("Ant", None)
+    factorization = _factorization(list(parts[0]), edges, globals_, x)
+    return _parallel_env("Ant", "custom", factorization, obsk)
+
+
+def make_many_segment_env(x: Partition, obsk: int = 1) -> Any:
+    n_segs, rest = divmod(len(x), SEGMENT_ACTUATORS)
+    if rest or not n_segs:
+        raise ValueError(
+            f"partition of length {len(x)} does not cover whole segments: "
+            f"ManySegmentAnt has {SEGMENT_ACTUATORS} actuators per segment"
+        )
+    factorization = _factorization(*many_segment_graph(n_segs), x)
+    return _parallel_env("ManySegmentAnt", f"{n_segs}x1", factorization, obsk)
 
 
 @dataclass(frozen=True)
@@ -106,7 +166,14 @@ class PartitionSpec:
 
     @classmethod
     def build(cls, x: Partition, obsk: int = 1) -> Self:
-        env = make_ma_env(x, obsk)
+        return cls.from_env(x, make_ma_env(x, obsk))
+
+    @classmethod
+    def build_many_segment(cls, x: Partition, obsk: int = 1) -> Self:
+        return cls.from_env(x, make_many_segment_env(x, obsk))
+
+    @classmethod
+    def from_env(cls, x: Partition, env: Any) -> Self:
         obs_idx = [
             np.asarray(env.observation_factorization[a])
             for a in env.possible_agents
@@ -142,7 +209,7 @@ class PartitionSpec:
 
     def merge_actions(self, local_actions: Sequence[np.ndarray]) -> np.ndarray:
         batch = local_actions[0].shape[:-1]
-        merged = np.zeros((*batch, N_ACTUATORS), dtype=np.float32)
+        merged = np.zeros((*batch, len(self.x)), dtype=np.float32)
         for idx, act in zip(self.act_idx, local_actions, strict=True):
             merged[..., idx] = act
         return merged
