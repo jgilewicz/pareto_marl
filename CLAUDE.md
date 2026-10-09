@@ -46,6 +46,11 @@
   first contact, then diverges; MJX and C pick different tangent frames for
   capsule–plane contacts, so the friction pyramid rotates. With elliptic
   cones both agree (gate 1), so the integration itself matches.
+- MJX solver budget: `load_model` sets `opt.iterations=10`,
+  `ls_iterations=20` (XML: 100/50). Float32 Newton never reaches the XML
+  tolerance 1e-8, so MJX always ran all 100/50. One-step qvel vs 100/50 over
+  100 random steps: max |Δ| 1.9e-6 (n_segs 2), 1.3e-5 (16); 4/8 deviates
+  (4.5 at 16). ~2× env steps/s on CPU.
 - Port gates are scripts in `gates/`, run once, output in the PR (no pytest).
 - JAX MAPPO = torch `mappo.py` (v2); actors padded to the partition max:
   padded obs inputs are zeroed, padded action slots are masked in

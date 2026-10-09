@@ -34,6 +34,10 @@ CTRL_COST = 0.5
 HEALTHY_REWARD = 1.0
 HEALTHY_Z = (0.2, 1.0)
 MAIN_BODY = "torso_0"
+# float32 Newton never reaches the XML tolerance (1e-8), so MJX would always
+# run the XML's 100/50 iterations; 10/20 gives the same qvel to float32 noise
+SOLVER_ITERATIONS = 10
+SOLVER_LS_ITERATIONS = 20
 
 
 @struct.dataclass
@@ -49,7 +53,10 @@ def load_model(n_segs: int) -> MjModel:
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, f"many_segment_ant_{n_segs}.xml")
         gen_asset(n_segs, path)
-        return MjModel.from_xml_path(path)
+        model = MjModel.from_xml_path(path)
+    model.opt.iterations = SOLVER_ITERATIONS
+    model.opt.ls_iterations = SOLVER_LS_ITERATIONS
+    return model
 
 
 def make_spec(n_segs: int) -> EnvSpec:

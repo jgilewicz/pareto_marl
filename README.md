@@ -36,6 +36,7 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   - task = `Ant-v5` on that XML without contact cost: frame_skip 5, obs
     `qpos[2:]`, `qvel`, reward x_velocity(`torso_0`) + 1 − 0.5·‖a‖²,
     terminated when z ∉ [0.2, 1] or state not finite
+  - MJX solver budget `iterations=10`, `ls_iterations=20` (XML: 100/50)
 - `pareto_marl/partition.py` (ManySegmentAnt)
   - `structured_partitions(n_segs)`: `single`, `segment`, `leg`, `joint`
   - `make_many_segment_env(x)`, `PartitionSpec.build_many_segment(x)`:
