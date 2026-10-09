@@ -47,3 +47,14 @@
   capsule–plane contacts, so the friction pyramid rotates. With elliptic
   cones both agree (gate 1), so the integration itself matches.
 - Port gates are scripts in `gates/`, run once, output in the PR (no pytest).
+- JAX MAPPO = torch `mappo.py` (v2); actors padded to the partition max:
+  padded obs inputs are zeroed, padded action slots are masked in
+  log-prob/entropy and never gathered into the env action, so padded
+  params get zero grads and stay zero. Init each actor at its true size,
+  then zero-pad (orthogonal init of the padded shape differs).
+- Adv. normalization uses `std(ddof=1)` (torch `.std()`).
+- Obs stats skip gymnasium's update with the terminal obs on done steps:
+  the contract exposes only the reset obs.
+- A seed's result depends on the vmap batch it runs in (ulp-level diffs in
+  batched matmuls grow chaotically); the same call is bitwise reproducible
+  on CPU, so keep the seed set per compiled program fixed.

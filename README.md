@@ -44,6 +44,19 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   - `uv run python gates/physics.py` — MJX vs Ant-v5 (MuJoCo C), n_segs 2, 16
   - `uv run python gates/indices.py` — agent indices vs MuJoCo names
   - `uv run python gates/throughput.py` — `jit(vmap(step))`, 8 envs
+- `pareto_marl/networks/actor_critic.py` — K actors `vmap`ped over a
+  leading agent axis, obs/actions padded to the partition max and masked;
+  shared critic; hand-written per-agent Gaussian log-prob/entropy
+  - `build_layout(obs_idx, act_idx, obs_dim, action_dim)` — same index
+    lists as `PartitionSpec`; checks each actuator is owned exactly once
+- `pareto_marl/losses/ppo.py` — MAPPO loss (per-agent clip, sum over agents)
+- `pareto_marl/utils/normalize.py` — gymnasium 1.4 `NormalizeObservation` /
+  `NormalizeReward` + clip ±10, per env
+- `pareto_marl/training/mappo.py` — `PPOConfig` (v2 values), `train(setup,
+  spec, seed)` jit/vmap-able over seeds, `train_seeds` = one compiled
+  program for several seeds + compile time and steps/s
+  - output: eval mean/std raw return, eval `x_velocity`, per-iteration
+    sum/count of finished episodes' raw returns, mean losses per iteration
 
 ## Local
 
