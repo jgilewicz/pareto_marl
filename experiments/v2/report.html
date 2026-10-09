@@ -1,0 +1,440 @@
+<title>Does the actuator partition matter?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one lab-notebook column; verdict first, then evidence per K,
+   then the cost/size trade-off, training curves, full table, method. */
+:root {
+  --paper: #f7f8f9;
+  --sheet: #ffffff;
+  --ink: #15191e;
+  --ink-2: #4a525c;
+  --ink-3: #7a838e;
+  --rule: #dfe3e8;
+  --rule-strong: #c3c9d1;
+  --accent: #2a78d6;
+  --random: #9aa3ad;
+  --go: #13804f;
+  --go-bg: #e3f3ea;
+  --nogo: #b8322f;
+  --nogo-bg: #fbe7e6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --chip-ink: #ffffff;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.9375rem; --t-lg: 1.25rem;
+  --t-xl: 1.75rem; --t-2xl: 2.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+    --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+    --accent: #3987e5; --random: #6c7681;
+    --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #111417; --sheet: #181c20; --ink: #eef1f4; --ink-2: #b4bcc6;
+  --ink-3: #848d98; --rule: #2a3037; --rule-strong: #3b434c;
+  --accent: #3987e5; --random: #6c7681;
+  --go: #4cc38a; --go-bg: #15291f; --nogo: #f07a77; --nogo-bg: #321a1a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--f-body);
+  font-size: var(--t-md); line-height: 1.55;
+  padding-inline: 16px; padding-block: 40px 64px;
+}
+main { max-width: 980px; margin-inline: auto; display: grid; gap: 56px; }
+h1, h2 { font-family: var(--f-display); font-weight: 600; text-wrap: balance;
+  margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: var(--t-2xl); line-height: 1.1; }
+h2 { font-size: var(--t-xl); line-height: 1.2; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3);
+  letter-spacing: 0.06em; text-transform: uppercase; }
+.lede { color: var(--ink-2); font-size: var(--t-lg); line-height: 1.45; }
+section { display: grid; gap: 18px; }
+.head { display: grid; gap: 10px; }
+.num { font-variant-numeric: tabular-nums; font-family: var(--f-mono); }
+.muted { color: var(--ink-3); }
+.small { font-size: var(--t-sm); }
+
+/* verdict */
+.verdict { background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 24px; display: grid; gap: 20px; }
+.verdict-top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+.stamp { font-family: var(--f-display); font-weight: 600; font-size: var(--t-xl);
+  padding: 4px 16px; border-radius: 4px; border: 2px solid currentColor;
+  letter-spacing: 0.04em; }
+.stamp.go { color: var(--go); background: var(--go-bg); }
+.stamp.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs);
+  font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.pill.go { color: var(--go); background: var(--go-bg); }
+.pill.nogo { color: var(--nogo); background: var(--nogo-bg); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: var(--t-xs);
+  text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+td.r, th.r { text-align: right; }
+
+/* partition chip: 8 actuator cells, grouped by leg */
+.chip { display: inline-flex; gap: 3px; }
+.leg { display: inline-flex; gap: 1px; }
+.cell { width: 13px; height: 17px; border-radius: 2px; font-family: var(--f-mono);
+  font-size: 10px; line-height: 17px; text-align: center; color: var(--chip-ink);
+  font-weight: 500; }
+.legend-chip { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+
+/* strip plot */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 18px 20px; display: grid; gap: 10px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: 6px 16px; align-items: baseline; }
+.panel-head h3 { margin: 0; font-family: var(--f-display); font-weight: 600;
+  font-size: var(--t-lg); }
+.strip { display: grid; grid-template-columns: auto minmax(110px, 170px) 1fr 64px;
+  column-gap: 14px; align-items: center; }
+.strip > .row { display: contents; }
+.strip .lab { font-size: var(--t-sm); line-height: 1.2; }
+.strip .lab .key { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--ink-3); }
+.track { position: relative; height: 30px; border-bottom: 1px solid var(--rule); }
+.axis { position: relative; height: 18px; }
+.axis span { position: absolute; transform: translateX(-50%); font-size: var(--t-xs);
+  color: var(--ink-3); font-family: var(--f-mono); }
+.gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+.refline { position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1.5px dashed var(--ink-3); }
+.band { position: absolute; top: 11px; height: 8px; border-radius: 4px; opacity: 0.18; }
+.mean { position: absolute; top: 6px; height: 18px; width: 2px; background: var(--ink);
+  transform: translateX(-1px); }
+.dot { position: absolute; top: 10px; width: 10px; height: 10px; border-radius: 50%;
+  transform: translateX(-5px); border: 2px solid var(--sheet); cursor: default; }
+.dot:hover, .dot:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.meanval { text-align: right; font-size: var(--t-sm); }
+@media (max-width: 640px) {
+  .strip { grid-template-columns: auto 1fr 52px; }
+  .strip .lab { display: none; }
+}
+
+/* svg charts */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--ink-3); font-family: var(--f-mono); font-size: 11px; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .axisline { stroke: var(--rule-strong); stroke-width: 1; }
+.series-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--t-sm); }
+.series-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch.dotsw { width: 9px; height: 9px; border-radius: 50%; }
+
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--paper);
+  font-size: var(--t-xs); font-family: var(--f-mono); padding: 6px 8px; border-radius: 4px;
+  z-index: 10; white-space: nowrap; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 28px; }
+.fact { display: grid; gap: 2px; border-top: 1px solid var(--rule-strong); padding-top: 10px; }
+.fact b { font-family: var(--f-mono); font-weight: 500; font-size: var(--t-lg);
+  font-variant-numeric: tabular-nums; }
+ul.notes { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main id="app">
+  <header class="head">
+    <div class="eyebrow" id="eyebrow">pareto-marl · MaMuJoCo Ant-v5</div>
+    <h1>Does the actuator partition matter?</h1>
+    <p class="lede">At a fixed number of agents K, does the way Ant's eight
+      actuators are split between MAPPO agents change the return more than the
+      spread between training seeds?</p>
+  </header>
+  <section class="verdict" id="verdict"></section>
+  <section id="strips"></section>
+  <section id="front"></section>
+  <section id="curves"></section>
+  <section id="table"></section>
+  <section id="method"></section>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = {"meta":{"run_id":"v2","total_steps":3000000,"n_mappo":230,"n_mappo_expected":230,"n_cleanrl":10,"n_seeds":10,"cpu_hours":274.9,"generated":"2026-10-09 15:14 UTC"},"rule":{"p":0.05,"icc":0.2},"verdict":{"go":false,"per_k":{"2":{"n_partitions":12,"p_value":0.5935978807724149,"f_stat":0.8473545332306162,"icc":-0.015501164932598939,"go":false},"4":{"n_partitions":9,"p_value":0.6034424631783714,"f_stat":0.8009822859049626,"icc":-0.02030589468376552,"go":false}}},"cleanrl_check":{"mappo_k1":[2744.0491752465887,887.078667776583],"cleanrl":[2233.5775629062673,934.5368346264783],"welch_p":0.25011756734082496},"partitions":[{"x":"00000000","k":1,"group":"reference","label":"single agent","actor_params":6480,"n_seeds":10,"return_mean":2830.834278617691,"return_std":1006.409668127371,"x_velocity_mean":2.760292399533705,"returns":[2914.6,4072.1,3730.6,2125.8,1122.3,3262.1,3635.8,3529.3,1459.7,2456.0],"velocities":[2.96,3.656,3.622,1.755,2.173,2.733,3.389,3.703,1.673,1.939]},{"x":"00000011","k":2,"group":"random","label":"","actor_params":11664,"n_seeds":10,"return_mean":2172.9346221074643,"return_std":1028.6753758805044,"x_velocity_mean":2.0109609749266477,"returns":[1757.4,4027.6,506.6,2305.5,1630.5,3285.4,1021.9,2645.4,2364.2,2184.9],"velocities":[1.388,3.698,0.767,2.753,1.202,2.998,1.329,2.139,1.829,2.006]},{"x":"00000101","k":2,"group":"random","label":"","actor_params":11664,"n_seeds":10,"return_mean":2023.2857858066964,"return_std":823.5444899181931,"x_velocity_mean":1.9394630093666891,"returns":[1770.2,2680.0,2838.9,551.6,2864.5,1167.2,2346.5,1348.9,2874.1,1790.8],"velocities":[2.243,2.167,2.684,0.723,2.757,0.632,1.89,1.433,2.81,2.056]},{"x":"00001010","k":2,"group":"random","label":"","actor_params":11792,"n_seeds":10,"return_mean":1497.139670760887,"return_std":413.69483540795346,"x_velocity_mean":1.3970261255929515,"returns":[1387.4,2032.7,1740.8,1853.2,1005.9,1729.2,1380.1,954.8,971.2,1916.2],"velocities":[1.499,2.257,1.394,1.342,0.927,1.353,1.279,0.476,1.422,2.022]},{"x":"00100010","k":2,"group":"random","label":"","actor_params":11792,"n_seeds":10,"return_mean":1747.460763535507,"return_std":664.1454840820128,"x_velocity_mean":1.6276514218002913,"returns":[1554.8,1768.7,686.0,1951.7,1928.1,1036.0,1612.9,1949.1,3219.2,1768.2],"velocities":[1.447,1.609,0.386,2.088,1.604,1.219,1.394,1.538,2.868,2.123]},{"x":"00100110","k":2,"group":"random","label":"","actor_params":11856,"n_seeds":10,"return_mean":1912.4067447128757,"return_std":979.687263335459,"x_velocity_mean":1.8407230156392593,"returns":[1204.3,909.2,1072.5,2020.8,2082.3,1807.0,3405.8,828.6,3614.4,2179.2],"velocities":[1.253,0.741,0.86,2.516,2.424,1.598,3.05,0.756,3.533,1.678]},{"x":"01000000","k":2,"group":"random","label":"","actor_params":11536,"n_seeds":10,"return_mean":1984.626361893536,"return_std":910.2349600202232,"x_velocity_mean":1.9338155214351924,"returns":[4049.3,1527.6,1415.2,1377.8,1630.1,1330.6,2633.9,1081.3,2679.6,2120.9],"velocities":[3.93,1.543,1.638,1.413,1.42,1.261,2.162,1.74,2.393,1.837]},{"x":"01001110","k":2,"group":"random","label":"","actor_params":11792,"n_seeds":10,"return_mean":1866.5003624768765,"return_std":563.7606473696025,"x_velocity_mean":1.7569273028738466,"returns":[911.2,913.8,1716.1,2169.1,2184.7,2373.5,2151.9,2365.1,2276.6,1603.1],"velocities":[0.792,1.142,1.413,2.27,1.913,2.177,1.638,2.288,1.986,1.951]},{"x":"01100111","k":2,"group":"random","label":"","actor_params":11856,"n_seeds":10,"return_mean":2024.081186648044,"return_std":568.4405078615306,"x_velocity_mean":1.777850509658603,"returns":[1597.7,1402.7,2722.5,2376.5,2825.6,2087.3,2215.2,1143.2,2291.2,1579.1],"velocities":[1.037,1.717,2.451,2.032,2.534,1.717,1.918,0.942,1.964,1.467]},{"x":"00001111","k":2,"group":"structured","label":"front / back","actor_params":11664,"n_seeds":10,"return_mean":2296.958367485192,"return_std":1143.547311206567,"x_velocity_mean":2.1457067633991835,"returns":[3672.1,2062.9,986.9,3076.3,1284.9,1462.7,1636.3,1807.4,4552.2,2427.8],"velocities":[3.626,1.676,0.641,2.649,1.558,1.279,1.393,2.253,4.017,2.365]},{"x":"00110011","k":2,"group":"structured","label":"diagonals","actor_params":11664,"n_seeds":10,"return_mean":2220.3942531343705,"return_std":1001.1505444943465,"x_velocity_mean":2.1089623676796934,"returns":[2766.2,2077.7,3012.2,1180.1,3843.3,1022.8,3138.2,1135.6,1373.3,2654.6],"velocities":[2.383,1.692,2.998,0.961,3.494,1.095,3.01,1.173,1.695,2.588]},{"x":"00111100","k":2,"group":"structured","label":"left / right","actor_params":11664,"n_seeds":10,"return_mean":1938.2792912584741,"return_std":883.0973456098816,"x_velocity_mean":1.9023897665803922,"returns":[3210.3,2504.4,1289.1,2027.4,3212.2,2188.5,1299.2,1104.6,1972.8,574.2],"velocities":[3.25,2.74,1.132,1.94,3.048,1.937,0.994,1.151,1.489,1.343]},{"x":"01010101","k":2,"group":"structured","label":"hips / ankles","actor_params":11920,"n_seeds":10,"return_mean":1584.2415927574166,"return_std":632.6678509907822,"x_velocity_mean":1.4932530272330238,"returns":[2143.5,1355.9,1388.6,1972.1,871.5,781.2,2549.7,1162.2,2394.0,1223.8],"velocities":[1.684,1.261,1.374,1.821,0.919,0.916,2.082,1.621,2.475,0.78]},{"x":"01020131","k":4,"group":"random","label":"","actor_params":22032,"n_seeds":10,"return_mean":1223.0000423367594,"return_std":700.3417955508094,"x_velocity_mean":1.0046587747094042,"returns":[1065.9,1342.5,798.5,922.0,925.6,1057.4,1091.8,3138.1,1216.4,671.9],"velocities":[0.916,1.056,0.857,0.597,0.715,0.747,0.672,2.661,1.043,0.782]},{"x":"01200023","k":4,"group":"random","label":"","actor_params":21840,"n_seeds":10,"return_mean":1409.5883009720364,"return_std":820.1532260091479,"x_velocity_mean":1.3590649016538943,"returns":[779.0,898.3,1132.0,909.1,3220.8,2280.4,705.8,1816.6,1536.7,817.0],"velocities":[0.461,1.133,1.376,0.55,2.937,2.077,0.966,1.357,1.611,1.122]},{"x":"01200321","k":4,"group":"random","label":"","actor_params":21968,"n_seeds":10,"return_mean":1319.6185610115826,"return_std":938.4066194464292,"x_velocity_mean":1.1589918337257494,"returns":[416.4,3404.7,2324.5,853.2,637.6,1353.3,1150.0,1732.3,710.8,613.5],"velocities":[0.654,2.933,1.881,0.482,0.725,1.213,1.005,1.691,0.608,0.398]},{"x":"01203221","k":4,"group":"random","label":"","actor_params":22160,"n_seeds":10,"return_mean":1251.5626754771986,"return_std":854.7145355593118,"x_velocity_mean":1.091842275186014,"returns":[421.4,739.8,1042.8,1321.7,2263.1,3199.4,849.4,574.0,882.8,1221.3],"velocities":[0.616,0.871,0.554,1.219,1.692,2.753,0.692,0.787,0.769,0.966]},{"x":"01211123","k":4,"group":"random","label":"","actor_params":22032,"n_seeds":10,"return_mean":1095.1171039509322,"return_std":371.0628299586784,"x_velocity_mean":0.9055282386945352,"returns":[1024.6,1592.0,1678.1,1005.8,1172.3,1229.4,785.8,552.0,1260.6,650.7],"velocities":[1.165,1.342,1.231,0.737,0.879,1.159,0.42,0.567,1.12,0.437]},{"x":"01213132","k":4,"group":"random","label":"","actor_params":22224,"n_seeds":10,"return_mean":1552.00813314487,"return_std":529.6619612713322,"x_velocity_mean":1.326569086893605,"returns":[2116.3,1721.4,1205.3,1279.1,529.2,1917.3,1315.3,1846.1,1274.0,2316.0],"velocities":[1.734,1.554,0.799,1.118,0.767,1.638,1.23,1.648,0.767,2.01]},{"x":"01223012","k":4,"group":"random","label":"","actor_params":22224,"n_seeds":10,"return_mean":1134.1580405392147,"return_std":408.156567952782,"x_velocity_mean":1.04366916826818,"returns":[541.4,1987.5,752.6,1344.8,1115.8,1349.3,972.5,842.6,1046.9,1388.1],"velocities":[0.791,1.61,0.676,1.434,1.22,1.487,0.83,0.509,0.702,1.18]},{"x":"01232032","k":4,"group":"random","label":"","actor_params":22096,"n_seeds":10,"return_mean":1165.523324114388,"return_std":796.0018497008682,"x_velocity_mean":1.0766901089897105,"returns":[721.6,1798.2,547.8,3139.6,969.1,816.4,1200.9,471.8,744.4,1245.5],"velocities":[0.37,1.61,0.629,2.778,0.727,0.77,1.095,1.091,0.599,1.098]},{"x":"00112233","k":4,"group":"structured","label":"agent per leg","actor_params":22032,"n_seeds":10,"return_mean":891.493781316806,"return_std":296.22911671242724,"x_velocity_mean":0.9409770019660064,"returns":[461.1,992.9,633.0,521.0,1156.8,997.4,1178.7,730.0,1338.5,905.5],"velocities":[1.393,1.676,0.563,0.465,0.94,0.691,1.086,0.396,1.216,0.984]},{"x":"01234567","k":8,"group":"reference","label":"agent per joint","actor_params":42256,"n_seeds":10,"return_mean":495.4571543581088,"return_std":258.8048064132017,"x_velocity_mean":0.4203962122353862,"returns":[596.0,255.3,350.9,349.4,630.3,531.6,437.7,1137.1,386.2,280.0],"velocities":[0.307,0.082,0.183,0.371,0.549,0.711,0.074,1.043,0.398,0.486]}],"curves":{"MAPPO K=1":[[20480,-97.5],[40960,-85.7],[61440,-69.9],[81920,-57.7],[102400,-49.1],[122880,-40.6],[143360,-31.3],[163840,-21.6],[184320,-17.2],[204800,-6.3],[225280,3.6],[245760,17.5],[266240,36.0],[286720,65.2],[307200,101.2],[327680,156.3],[348160,197.2],[368640,257.2],[389120,354.7],[409600,433.0],[430080,475.0],[450560,549.2],[471040,614.9],[491520,734.5],[512000,874.8],[532480,822.5],[552960,917.1],[573440,962.8],[593920,1119.6],[614400,1212.2],[634880,1128.3],[655360,1218.5],[675840,1338.2],[696320,1390.7],[716800,1453.7],[737280,1502.8],[757760,1466.7],[778240,1506.3],[798720,1571.4],[819200,1487.9],[839680,1625.7],[860160,1632.1],[880640,1790.3],[901120,1701.7],[921600,1812.7],[942080,1845.9],[962560,1894.4],[983040,1936.2],[1003520,2040.2],[1024000,1990.7],[1044480,2092.3],[1064960,2022.4],[1085440,2034.5],[1105920,2184.8],[1126400,2171.6],[1146880,2232.0],[1167360,2234.0],[1187840,2228.1],[1208320,2202.8],[1228800,2275.5],[1249280,2260.8],[1269760,2239.0],[1290240,2436.5],[1310720,2266.1],[1331200,2330.6],[1351680,2310.7],[1372160,2422.0],[1392640,2347.5],[1413120,2469.0],[1433600,2257.6],[1454080,2321.3],[1474560,2295.7],[1495040,2302.6],[1515520,2443.7],[1536000,2431.4],[1556480,2406.8],[1576960,2279.6],[1597440,2484.6],[1617920,2479.3],[1638400,2494.7],[1658880,2492.2],[1679360,2520.3],[1699840,2427.2],[1720320,2485.1],[1740800,2545.6],[1761280,2429.9],[1781760,2534.1],[1802240,2516.6],[1822720,2447.0],[1843200,2399.1],[1863680,2412.8],[1884160,2309.4],[1904640,2326.7],[1925120,2431.0],[1945600,2470.1],[1966080,2426.2],[1986560,2446.7],[2007040,2386.8],[2027520,2386.0],[2048000,2396.8],[2068480,2446.8],[2088960,2403.4],[2109440,2547.3],[2129920,2577.7],[2150400,2365.9],[2170880,2427.7],[2191360,2419.3],[2211840,2355.3],[2232320,2444.9],[2252800,2501.0],[2273280,2484.1],[2293760,2581.2],[2314240,2544.0],[2334720,2563.5],[2355200,2609.4],[2375680,2537.3],[2396160,2614.1],[2416640,2709.9],[2437120,2489.3],[2457600,2711.4],[2478080,2649.1],[2498560,2668.3],[2519040,2653.0],[2539520,2704.0],[2560000,2687.0],[2580480,2642.0],[2600960,2728.3],[2621440,2648.3],[2641920,2726.5],[2662400,2782.8],[2682880,2695.1],[2703360,2714.2],[2723840,2779.9],[2744320,2800.5],[2764800,2831.3],[2785280,2835.5],[2805760,2884.4],[2826240,2770.5],[2846720,2740.1],[2867200,2626.0],[2887680,2672.1],[2908160,2797.5],[2928640,2730.0],[2949120,2575.5],[2969600,2706.5],[2990080,2776.3]],"MAPPO K=2":[[20480,-93.6],[40960,-90.2],[61440,-71.9],[81920,-58.0],[102400,-43.5],[122880,-34.6],[143360,-22.7],[163840,-10.8],[184320,4.9],[204800,28.8],[225280,60.5],[245760,99.9],[266240,149.8],[286720,203.8],[307200,258.9],[327680,328.4],[348160,397.6],[368640,482.1],[389120,542.6],[409600,596.1],[430080,668.1],[450560,726.5],[471040,759.4],[491520,835.3],[512000,886.3],[532480,925.0],[552960,958.0],[573440,1011.9],[593920,1078.3],[614400,1120.2],[634880,1144.9],[655360,1181.1],[675840,1227.4],[696320,1259.4],[716800,1280.5],[737280,1306.5],[757760,1337.9],[778240,1396.1],[798720,1406.3],[819200,1439.5],[839680,1437.7],[860160,1456.1],[880640,1486.8],[901120,1498.6],[921600,1505.8],[942080,1539.9],[962560,1556.8],[983040,1591.6],[1003520,1568.8],[1024000,1595.0],[1044480,1616.3],[1064960,1602.2],[1085440,1635.1],[1105920,1630.9],[1126400,1652.8],[1146880,1674.7],[1167360,1651.0],[1187840,1648.4],[1208320,1644.2],[1228800,1685.9],[1249280,1674.6],[1269760,1673.8],[1290240,1677.0],[1310720,1696.8],[1331200,1684.4],[1351680,1731.5],[1372160,1729.6],[1392640,1719.5],[1413120,1723.4],[1433600,1746.5],[1454080,1710.8],[1474560,1729.6],[1495040,1763.4],[1515520,1743.3],[1536000,1745.2],[1556480,1774.9],[1576960,1764.6],[1597440,1760.6],[1617920,1742.1],[1638400,1765.6],[1658880,1773.3],[1679360,1776.3],[1699840,1800.0],[1720320,1813.9],[1740800,1790.9],[1761280,1798.7],[1781760,1795.8],[1802240,1780.4],[1822720,1773.9],[1843200,1764.7],[1863680,1775.6],[1884160,1776.7],[1904640,1805.8],[1925120,1793.9],[1945600,1811.0],[1966080,1806.4],[1986560,1811.3],[2007040,1832.3],[2027520,1815.9],[2048000,1813.9],[2068480,1806.0],[2088960,1822.3],[2109440,1803.7],[2129920,1840.2],[2150400,1841.5],[2170880,1833.9],[2191360,1829.7],[2211840,1818.8],[2232320,1858.6],[2252800,1846.1],[2273280,1845.3],[2293760,1832.0],[2314240,1843.1],[2334720,1825.0],[2355200,1849.5],[2375680,1866.9],[2396160,1862.3],[2416640,1867.7],[2437120,1865.9],[2457600,1883.2],[2478080,1873.0],[2498560,1888.4],[2519040,1877.5],[2539520,1875.1],[2560000,1860.4],[2580480,1871.6],[2600960,1889.0],[2621440,1863.2],[2641920,1871.5],[2662400,1883.2],[2682880,1896.3],[2703360,1893.5],[2723840,1880.9],[2744320,1874.5],[2764800,1896.0],[2785280,1889.3],[2805760,1889.1],[2826240,1901.9],[2846720,1888.3],[2867200,1899.0],[2887680,1919.8],[2908160,1893.9],[2928640,1922.4],[2949120,1907.8],[2969600,1905.7],[2990080,1925.3]],"MAPPO K=4":[[20480,-89.9],[40960,-90.9],[61440,-70.2],[81920,-56.1],[102400,-40.3],[122880,-28.5],[143360,-14.8],[163840,4.2],[184320,30.0],[204800,67.8],[225280,117.4],[245760,171.5],[266240,224.0],[286720,298.3],[307200,358.0],[327680,434.1],[348160,486.7],[368640,539.9],[389120,599.5],[409600,640.8],[430080,698.7],[450560,753.4],[471040,792.4],[491520,817.5],[512000,840.3],[532480,876.6],[552960,926.7],[573440,931.2],[593920,968.6],[614400,974.6],[634880,1003.4],[655360,1010.3],[675840,1057.1],[696320,1077.9],[716800,1060.0],[737280,1091.8],[757760,1103.6],[778240,1105.5],[798720,1113.3],[819200,1138.6],[839680,1147.8],[860160,1117.2],[880640,1143.9],[901120,1143.9],[921600,1157.6],[942080,1155.3],[962560,1143.7],[983040,1135.5],[1003520,1164.2],[1024000,1149.4],[1044480,1164.9],[1064960,1143.5],[1085440,1137.8],[1105920,1155.9],[1126400,1149.5],[1146880,1157.2],[1167360,1152.9],[1187840,1163.9],[1208320,1152.0],[1228800,1154.6],[1249280,1152.0],[1269760,1149.8],[1290240,1138.5],[1310720,1139.1],[1331200,1152.9],[1351680,1150.0],[1372160,1157.5],[1392640,1163.7],[1413120,1144.3],[1433600,1153.2],[1454080,1149.4],[1474560,1157.2],[1495040,1150.0],[1515520,1163.9],[1536000,1149.9],[1556480,1163.7],[1576960,1153.8],[1597440,1157.7],[1617920,1161.8],[1638400,1160.7],[1658880,1161.7],[1679360,1164.5],[1699840,1165.7],[1720320,1135.5],[1740800,1138.1],[1761280,1135.6],[1781760,1144.9],[1802240,1163.4],[1822720,1155.5],[1843200,1161.1],[1863680,1136.2],[1884160,1155.4],[1904640,1141.3],[1925120,1124.8],[1945600,1164.5],[1966080,1141.3],[1986560,1140.0],[2007040,1143.9],[2027520,1144.1],[2048000,1148.6],[2068480,1133.4],[2088960,1129.3],[2109440,1144.7],[2129920,1124.7],[2150400,1142.3],[2170880,1142.7],[2191360,1138.6],[2211840,1151.4],[2232320,1141.2],[2252800,1148.9],[2273280,1167.2],[2293760,1151.5],[2314240,1119.6],[2334720,1116.9],[2355200,1133.0],[2375680,1144.2],[2396160,1147.3],[2416640,1149.3],[2437120,1145.6],[2457600,1148.3],[2478080,1163.2],[2498560,1153.7],[2519040,1153.9],[2539520,1146.4],[2560000,1140.7],[2580480,1150.4],[2600960,1152.1],[2621440,1147.2],[2641920,1141.3],[2662400,1145.8],[2682880,1173.2],[2703360,1149.5],[2723840,1175.6],[2744320,1135.3],[2764800,1143.7],[2785280,1145.9],[2805760,1156.4],[2826240,1157.2],[2846720,1153.4],[2867200,1153.7],[2887680,1144.6],[2908160,1159.8],[2928640,1163.9],[2949120,1152.6],[2969600,1156.0],[2990080,1154.6]],"MAPPO K=8":[[20480,-88.5],[40960,-92.6],[61440,-69.4],[81920,-48.4],[102400,-39.8],[122880,-28.6],[143360,-14.6],[163840,4.5],[184320,34.6],[204800,74.0],[225280,108.2],[245760,140.7],[266240,202.5],[286720,217.3],[307200,259.9],[327680,293.7],[348160,351.1],[368640,376.8],[389120,393.6],[409600,424.4],[430080,418.2],[450560,460.0],[471040,467.7],[491520,473.8],[512000,520.2],[532480,528.6],[552960,528.4],[573440,557.8],[593920,542.0],[614400,589.2],[634880,598.1],[655360,621.8],[675840,602.3],[696320,614.2],[716800,559.2],[737280,635.7],[757760,559.1],[778240,588.3],[798720,607.4],[819200,584.4],[839680,627.5],[860160,598.1],[880640,608.3],[901120,599.0],[921600,623.4],[942080,612.8],[962560,654.3],[983040,644.2],[1003520,592.7],[1024000,601.5],[1044480,635.5],[1064960,591.1],[1085440,606.0],[1105920,605.4],[1126400,615.8],[1146880,615.9],[1167360,631.9],[1187840,615.6],[1208320,587.6],[1228800,623.4],[1249280,595.0],[1269760,603.8],[1290240,571.5],[1310720,606.2],[1331200,619.3],[1351680,589.6],[1372160,607.2],[1392640,626.3],[1413120,577.0],[1433600,600.6],[1454080,603.2],[1474560,564.3],[1495040,573.1],[1515520,558.9],[1536000,609.4],[1556480,582.2],[1576960,551.1],[1597440,594.0],[1617920,555.3],[1638400,589.3],[1658880,537.7],[1679360,546.7],[1699840,547.1],[1720320,537.6],[1740800,547.7],[1761280,513.4],[1781760,565.0],[1802240,575.6],[1822720,562.0],[1843200,586.9],[1863680,568.2],[1884160,537.2],[1904640,536.0],[1925120,553.3],[1945600,559.8],[1966080,585.0],[1986560,568.6],[2007040,567.4],[2027520,522.4],[2048000,557.4],[2068480,523.8],[2088960,518.3],[2109440,553.0],[2129920,545.4],[2150400,513.8],[2170880,489.4],[2191360,524.9],[2211840,514.5],[2232320,536.9],[2252800,572.6],[2273280,543.2],[2293760,549.4],[2314240,486.6],[2334720,521.9],[2355200,523.2],[2375680,522.0],[2396160,511.8],[2416640,517.4],[2437120,479.5],[2457600,515.3],[2478080,516.9],[2498560,489.9],[2519040,506.5],[2539520,521.9],[2560000,504.9],[2580480,504.2],[2600960,533.0],[2621440,543.3],[2641920,551.8],[2662400,493.3],[2682880,541.4],[2703360,535.5],[2723840,515.0],[2744320,523.9],[2764800,518.8],[2785280,492.9],[2805760,521.5],[2826240,532.5],[2846720,513.5],[2867200,520.6],[2887680,497.8],[2908160,538.9],[2928640,468.4],[2949120,507.5],[2969600,537.9],[2990080,505.8]],"CleanRL PPO":[[20480,-87.0],[40960,-87.2],[61440,-73.5],[81920,-61.6],[102400,-50.0],[122880,-44.1],[143360,-30.5],[163840,-28.0],[184320,-17.0],[204800,-10.9],[225280,1.0],[245760,16.7],[266240,41.0],[286720,72.0],[307200,115.9],[327680,183.5],[348160,255.4],[368640,313.8],[389120,391.0],[409600,471.9],[430080,552.4],[450560,589.7],[471040,652.4],[491520,728.4],[512000,833.3],[532480,946.0],[552960,952.9],[573440,1016.5],[593920,1163.0],[614400,1170.7],[634880,1217.1],[655360,1274.7],[675840,1420.8],[696320,1439.9],[716800,1467.2],[737280,1616.6],[757760,1602.4],[778240,1646.3],[798720,1527.2],[819200,1577.3],[839680,1649.4],[860160,1695.6],[880640,1749.2],[901120,1723.2],[921600,1761.8],[942080,1800.2],[962560,1692.6],[983040,1714.9],[1003520,1754.7],[1024000,1768.2],[1044480,1774.7],[1064960,1829.0],[1085440,1834.3],[1105920,1832.6],[1126400,1834.2],[1146880,1882.3],[1167360,1881.5],[1187840,1945.2],[1208320,2000.6],[1228800,1940.9],[1249280,1933.4],[1269760,1838.3],[1290240,1959.2],[1310720,1999.3],[1331200,1941.3],[1351680,1929.5],[1372160,1850.3],[1392640,1907.2],[1413120,1983.5],[1433600,2054.0],[1454080,2030.1],[1474560,2039.5],[1495040,2009.0],[1515520,2006.2],[1536000,1987.0],[1556480,1991.6],[1576960,2045.7],[1597440,2064.0],[1617920,2035.9],[1638400,2061.9],[1658880,2081.7],[1679360,2086.5],[1699840,2121.2],[1720320,2136.6],[1740800,2078.4],[1761280,2058.1],[1781760,2120.3],[1802240,2179.9],[1822720,2163.1],[1843200,2071.9],[1863680,1960.0],[1884160,2083.8],[1904640,2127.5],[1925120,2099.6],[1945600,2188.5],[1966080,2187.8],[1986560,2121.1],[2007040,2068.8],[2027520,2102.9],[2048000,2084.0],[2068480,2138.4],[2088960,2108.5],[2109440,2100.5],[2129920,2138.1],[2150400,2103.9],[2170880,2094.1],[2191360,2135.8],[2211840,2155.6],[2232320,2046.6],[2252800,2073.9],[2273280,2063.9],[2293760,1977.4],[2314240,2158.5],[2334720,2181.3],[2355200,2095.3],[2375680,2189.3],[2396160,2112.9],[2416640,2094.5],[2437120,2122.9],[2457600,2139.2],[2478080,2118.8],[2498560,2219.0],[2519040,2267.2],[2539520,2180.5],[2560000,2215.6],[2580480,2141.1],[2600960,2317.6],[2621440,2163.4],[2641920,2206.3],[2662400,2160.1],[2682880,2215.5],[2703360,2236.4],[2723840,2219.6],[2744320,2253.9],[2764800,2200.4],[2785280,2207.0],[2805760,2258.8],[2826240,2214.7],[2846720,2266.0],[2867200,2331.2],[2887680,2286.0],[2908160,2202.0],[2928640,2199.2],[2949120,2197.6],[2969600,2247.8],[2990080,2236.4]]}};
+const SERIES = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7","--s8"];
+const LEGS = [[0,1,"front-right"],[2,3,"front-left"],[4,5,"back-left"],[6,7,"back-right"]];
+const fmt = (v, d = 0) => v.toLocaleString("en-US", {maximumFractionDigits: d, minimumFractionDigits: d});
+const fmtP = p => p < 0.001 ? p.toExponential(1) : p.toFixed(3);
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (html) e.innerHTML = html;
+  return e;
+};
+
+function chip(key) {
+  const legs = LEGS.map(([a, b, name]) =>
+    `<span class="leg" title="${name}">${[a, b].map(i =>
+      `<span class="cell" style="background:var(${SERIES[+key[i]]})">${key[i]}</span>`
+    ).join("")}</span>`).join("");
+  return `<span class="chip" aria-label="partition ${key}">${legs}</span>`;
+}
+
+const tip = document.getElementById("tip");
+function bindTip(node, text) {
+  const show = e => {
+    tip.textContent = text; tip.hidden = false;
+    const r = node.getBoundingClientRect();
+    tip.style.left = Math.min(r.left + 12, innerWidth - tip.offsetWidth - 8) + "px";
+    tip.style.top = (r.top - tip.offsetHeight - 6) + "px";
+  };
+  node.addEventListener("mouseenter", show);
+  node.addEventListener("focus", show);
+  node.addEventListener("mouseleave", () => tip.hidden = true);
+  node.addEventListener("blur", () => tip.hidden = true);
+}
+
+function renderVerdict() {
+  const v = DATA.verdict, m = DATA.meta, r = DATA.rule;
+  const ks = Object.entries(v.per_k);
+  const passing = ks.filter(([, x]) => x.go).map(([k]) => "K=" + k);
+  const sentence = v.go
+    ? `The partition explains a real share of the return variance at ${passing.join(" and ")}. Searching over partitions has something to find.`
+    : `At neither K does the partition explain enough of the return variance to clear the pre-registered rule. With this many seeds, only K appears to matter.`;
+  const rows = ks.map(([k, x]) => `<tr>
+      <td class="num">K=${k}</td><td class="num r">${x.n_partitions}</td>
+      <td class="num r">${fmt(x.f_stat, 2)}</td><td class="num r">${fmtP(x.p_value)}</td>
+      <td class="num r">${fmt(x.icc, 2)}</td>
+      <td>${x.go ? '<span class="pill go">✓ passes</span>' : '<span class="pill nogo">✕ fails</span>'}</td></tr>`).join("");
+  document.getElementById("verdict").innerHTML = `
+    <div class="verdict-top">
+      <span class="stamp ${v.go ? "go" : "nogo"}">${v.go ? "GO" : "NO-GO"}</span>
+      <p>${sentence}</p>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Agents</th><th class="r">Partitions</th><th class="r">ANOVA F</th>
+        <th class="r">p</th><th class="r">ICC(1)</th><th>Rule</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="small muted">Rule fixed before the run: GO if, for K=2 or K=4, one-way ANOVA
+      over partitions gives p &lt; ${r.p} and ICC(1) ≥ ${r.icc} (at least ${r.icc * 100}% of the
+      eval-return variance comes from the partition). ${m.n_seeds} seeds per partition,
+      ${fmt(m.total_steps / 1e6, 0)}M environment steps each.</p>`;
+}
+
+function domain() {
+  const all = DATA.partitions.flatMap(p => p.returns);
+  const lo = Math.min(0, ...all), hi = Math.max(...all);
+  const step = niceStep((hi - lo) / 5);
+  return [Math.floor(lo / step) * step, Math.ceil(hi / step) * step, step];
+}
+function niceStep(raw) {
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw);
+}
+
+function renderStrips() {
+  const [lo, hi, step] = domain();
+  const pct = v => ((v - lo) / (hi - lo)) * 100;
+  const single = DATA.partitions.find(p => p.k === 1);
+  const sec = document.getElementById("strips");
+  sec.innerHTML = `<div class="head"><h2>Return by partition</h2>
+    <p class="muted">Each dot is one seed's evaluation return (10 deterministic episodes).
+      The black tick is the mean over seeds; the dashed line is the single-agent mean (K=1).
+      Rows are sorted by mean within each K.</p></div>
+    <div class="legend-chip small muted">${chip("00112233")}<span>actuator cells in leg order:
+      front-right, front-left, back-left, back-right (hip, ankle); colour and digit = agent</span></div>`;
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  const groups = [[2, "K = 2 agents"], [4, "K = 4 agents"], [null, "References"]];
+  for (const [k, title] of groups) {
+    const rows = DATA.partitions
+      .filter(p => k === null ? p.group === "reference" : p.k === k)
+      .sort((a, b) => b.return_mean - a.return_mean);
+    if (!rows.length) continue;
+    const verdictK = k && DATA.verdict.per_k[k];
+    const panel = el("div", {class: "panel"});
+    panel.innerHTML = `<div class="panel-head"><h3>${title}</h3>${verdictK
+      ? `<span class="small muted num">ICC ${fmt(verdictK.icc, 2)} · p ${fmtP(verdictK.p_value)}</span>` : ""}</div>`;
+    const strip = el("div", {class: "strip"});
+    const axis = `<span></span><span class="lab"></span><div class="axis">${ticks.map(t =>
+      `<span style="left:${pct(t)}%">${fmt(t)}</span>`).join("")}</div><span></span>`;
+    strip.insertAdjacentHTML("beforeend", axis);
+    for (const p of rows) {
+      const colour = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+      const sd = p.return_std;
+      const track = el("div", {class: "track"});
+      track.innerHTML = ticks.map(t => `<span class="gridline" style="left:${pct(t)}%"></span>`).join("")
+        + (single ? `<span class="refline" style="left:${pct(single.return_mean)}%"></span>` : "")
+        + `<span class="band" style="left:${pct(p.return_mean - sd)}%;width:${pct(p.return_mean + sd) - pct(p.return_mean - sd)}%;background:${colour}"></span>`
+        + `<span class="mean" style="left:${pct(p.return_mean)}%"></span>`;
+      p.returns.forEach((r, i) => {
+        const d = el("span", {class: "dot", tabindex: "0", style: `left:${pct(r)}%;background:${colour}`});
+        bindTip(d, `${p.x} · seed ${i} · return ${fmt(r)} · v ${fmt(p.velocities[i], 2)} m/s`);
+        track.appendChild(d);
+      });
+      const row = el("div", {class: "row"});
+      row.innerHTML = `<span>${chip(p.x)}</span><span class="lab">${p.label || "random"}<br><span class="key">${p.x}</span></span>`;
+      row.appendChild(track);
+      row.insertAdjacentHTML("beforeend", `<span class="meanval num">${fmt(p.return_mean)}</span>`);
+      strip.appendChild(row);
+    }
+    panel.appendChild(strip);
+    sec.appendChild(panel);
+  }
+}
+
+function svgFrame(w, h, pad) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  s.setAttribute("class", "chart");
+  s.setAttribute("role", "img");
+  return s;
+}
+function linearTicks(lo, hi, n) {
+  const step = niceStep((hi - lo) / n), out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+function axes(svg, xs, ys, sx, sy, W, H, pad, xfmt, yfmt) {
+  let g = "";
+  ys.forEach(v => g += `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${sy(v)}" y2="${sy(v)}"/>
+    <text x="${pad.l - 8}" y="${sy(v) + 4}" text-anchor="end">${yfmt(v)}</text>`);
+  xs.forEach(v => g += `<text x="${sx(v)}" y="${H - pad.b + 18}" text-anchor="middle">${xfmt(v)}</text>`);
+  g += `<line class="axisline" x1="${pad.l}" x2="${W - pad.r}" y1="${H - pad.b}" y2="${H - pad.b}"/>`;
+  svg.insertAdjacentHTML("beforeend", g);
+}
+
+function renderFront() {
+  const P = DATA.partitions, W = 900, H = 380, pad = {l: 64, r: 24, t: 16, b: 44};
+  const xMax = Math.max(...P.map(p => p.actor_params)) * 1.05;
+  const yLo = Math.min(0, ...P.map(p => p.return_mean - p.return_std));
+  const yHi = Math.max(...P.map(p => p.return_mean + p.return_std));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const sec = document.getElementById("front");
+  sec.innerHTML = `<div class="head"><h2>Return against actor size</h2>
+    <p class="muted">Actor parameters (f2) cluster by K because each extra agent adds its own
+      64×64 network; the ranges for different K never overlap. Points are means over seeds,
+      bars are ±1 standard deviation.</p></div>
+    <div class="series-legend"><span><i class="swatch dotsw" style="background:var(--ink)"></i>reference (K=1, K=8)</span>
+      <span><i class="swatch dotsw" style="background:var(--accent)"></i>structured</span>
+      <span><i class="swatch dotsw" style="background:var(--random)"></i>random</span></div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Mean eval return against actor parameter count for every partition");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1000) + "k", v => fmt(v));
+  svg.insertAdjacentHTML("beforeend", `<text x="${W - pad.r}" y="${H - 4}" text-anchor="end">actor parameters</text>`);
+  for (const p of [...P].sort((a, b) => (a.group === "random") - (b.group === "random")).reverse()) {
+    const c = p.group === "random" ? "var(--random)" : p.group === "structured" ? "var(--accent)" : "var(--ink)";
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("tabindex", "0");
+    g.innerHTML = `<line x1="${sx(p.actor_params)}" x2="${sx(p.actor_params)}" y1="${sy(p.return_mean - p.return_std)}"
+        y2="${sy(p.return_mean + p.return_std)}" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+      <circle cx="${sx(p.actor_params)}" cy="${sy(p.return_mean)}" r="5.5" fill="${c}" stroke="var(--sheet)" stroke-width="2"/>`;
+    if (p.group !== "random") {
+      g.insertAdjacentHTML("beforeend", `<text x="${sx(p.actor_params) + 9}" y="${sy(p.return_mean) - 8}">${p.x}</text>`);
+    }
+    bindTip(g, `${p.x} · K=${p.k} · ${fmt(p.actor_params)} params · return ${fmt(p.return_mean)} ± ${fmt(p.return_std)}`);
+    svg.appendChild(g);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+}
+
+function renderCurves() {
+  const C = DATA.curves, names = Object.keys(C), W = 900, H = 340, pad = {l: 64, r: 24, t: 16, b: 44};
+  const pts = names.flatMap(n => C[n]);
+  const xMax = DATA.meta.total_steps;
+  const yLo = Math.min(0, ...pts.map(p => p[1])), yHi = Math.max(...pts.map(p => p[1]));
+  const yt = linearTicks(yLo, yHi, 5), xt = linearTicks(0, xMax, 5);
+  const y0 = Math.min(yLo, yt[0]), y1 = Math.max(yHi, yt.at(-1));
+  const sx = v => pad.l + (v / xMax) * (W - pad.l - pad.r);
+  const sy = v => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+  const colour = n => n.startsWith("CleanRL") ? "var(--ink)" : `var(${SERIES[names.indexOf(n)]})`;
+  const sec = document.getElementById("curves");
+  const ck = DATA.cleanrl_check;
+  sec.innerHTML = `<div class="head"><h2>Training curves</h2>
+    <p class="muted">Mean episodic training return in ${fmt(20480 / 1000, 1)}k-step bins, averaged over
+      all runs with the same K (MAPPO) or over the ${DATA.meta.n_cleanrl} CleanRL seeds. Training returns include
+      exploration noise, so they sit below the deterministic evaluation returns.</p></div>
+    <div class="series-legend">${names.map(n => `<span><i class="swatch" style="background:${colour(n)}"></i>${n}</span>`).join("")}</div>`;
+  const panel = el("div", {class: "panel"});
+  const svg = svgFrame(W, H);
+  svg.setAttribute("aria-label", "Training return over environment steps per K and for CleanRL");
+  axes(svg, xt, yt, sx, sy, W, H, pad, v => fmt(v / 1e6, 1) + "M", v => fmt(v));
+  for (const n of names) {
+    const d = C[n].map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
+    svg.insertAdjacentHTML("beforeend", `<path d="${d}" fill="none" stroke="${colour(n)}" stroke-width="2"
+      stroke-linejoin="round" ${n.startsWith("CleanRL") ? 'stroke-dasharray="5 4"' : ""}/>`);
+    const last = C[n].at(-1);
+    if (last) svg.insertAdjacentHTML("beforeend", `<circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="3.5" fill="${colour(n)}"/>`);
+  }
+  panel.appendChild(svg);
+  sec.appendChild(panel);
+  sec.insertAdjacentHTML("beforeend", `<div class="facts">
+    <div class="fact"><span class="small muted">MAPPO K=1, last 10% of training</span>
+      <b>${fmt(ck.mappo_k1[0])} <span class="small muted">± ${fmt(ck.mappo_k1[1])}</span></b></div>
+    <div class="fact"><span class="small muted">CleanRL PPO, last 10% of training</span>
+      <b>${fmt(ck.cleanrl[0])} <span class="small muted">± ${fmt(ck.cleanrl[1])}</span></b></div>
+    <div class="fact"><span class="small muted">Welch t-test, K=1 vs CleanRL</span>
+      <b>p = ${fmtP(ck.welch_p)}</b></div></div>
+    <p class="small muted">Sanity check: with one agent, MAPPO should train like CleanRL's PPO on the
+      same budget and batch shape. A large gap here would mean the implementation, not the partition,
+      drives the results.</p>`);
+}
+
+function renderTable() {
+  const rows = [...DATA.partitions].sort((a, b) => a.k - b.k || b.return_mean - a.return_mean);
+  document.getElementById("table").innerHTML = `<div class="head"><h2>All partitions</h2>
+    <p class="muted">Forward velocity separates a walking policy from one that stands still and
+      collects the survival bonus (about 1 per step).</p></div>
+    <div class="panel table-wrap"><table>
+      <thead><tr><th>Partition</th><th>K</th><th>Group</th><th class="r">Actor params</th>
+        <th class="r">Eval return</th><th class="r">± std</th><th class="r">Forward v (m/s)</th>
+        <th class="r">Seeds</th></tr></thead>
+      <tbody>${rows.map(p => `<tr><td>${chip(p.x)} <span class="num small muted">${p.x}</span></td>
+        <td class="num">${p.k}</td><td>${p.label || p.group}</td>
+        <td class="num r">${fmt(p.actor_params)}</td><td class="num r">${fmt(p.return_mean)}</td>
+        <td class="num r">${fmt(p.return_std)}</td><td class="num r">${fmt(p.x_velocity_mean, 2)}</td>
+        <td class="num r">${p.n_seeds}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderMethod() {
+  const m = DATA.meta;
+  const missing = m.n_mappo_expected - m.n_mappo;
+  document.getElementById("method").innerHTML = `<div class="head"><h2>Method and coverage</h2></div>
+    <div class="facts">
+      <div class="fact"><span class="small muted">MAPPO runs</span><b>${m.n_mappo} / ${m.n_mappo_expected}</b></div>
+      <div class="fact"><span class="small muted">CleanRL runs</span><b>${m.n_cleanrl} / ${m.n_seeds}</b></div>
+      <div class="fact"><span class="small muted">Compute</span><b>${m.cpu_hours == null ? "n/a" : fmt(m.cpu_hours, 1) + " CPU-h"}</b></div>
+      <div class="fact"><span class="small muted">Generated</span><b class="small">${m.generated}</b></div>
+    </div>
+    <ul class="notes small">
+      ${missing ? `<li><strong>${missing} MAPPO runs are missing</strong>; ANOVA and ICC use the runs present.</li>` : ""}
+      <li>Design: K=1 and K=8 references; for K=2 four structured splits (front/back, left/right,
+        diagonals, hips/ankles) and eight random ones; for K=4 the per-leg split and eight random ones.
+        Random partitions are drawn uniformly among all partitions with that K.</li>
+      <li>MAPPO: CleanRL's continuous PPO with the actor split into K independent Gaussian actors on
+        local observations (MaMuJoCo, agent_obsk=1), one critic on the full state,
+        per-agent clipped ratios summed over agents. Hyperparameters fixed, not tuned.</li>
+      <li>Evaluation: 10 episodes with the mean action, observation statistics frozen from training.</li>
+      <li>ICC(1) = (MSB − MSW) / (MSB + (n−1)·MSW) with n seeds per partition.</li>
+      <li>Run ${m.run_id} on WCSS Bem2, one CPU core per run.</li>
+    </ul>`;
+  document.getElementById("eyebrow").textContent =
+    `pareto-marl · run ${m.run_id} · MaMuJoCo Ant-v5 · ${m.n_mappo + m.n_cleanrl} training runs`;
+}
+
+renderVerdict(); renderStrips(); renderFront(); renderCurves(); renderTable(); renderMethod();
+</script>
