@@ -63,7 +63,7 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--total-steps", type=int, default=1_000_000)
+    parser.add_argument("--total-steps", type=int, default=3_000_000)
     parser.add_argument("--design", type=Path, default=DESIGN_PATH)
     args = parser.parse_args()
     cfg = PPOConfig(total_steps=args.total_steps)

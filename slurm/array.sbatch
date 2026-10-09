@@ -1,19 +1,19 @@
 #!/bin/bash
 # submit from the repo root (venv in .venv, outputs in logs/):
-#   sbatch -A <account> --array=0-114 slurm/array.sbatch mappo <run_id>
-#   sbatch -A <account> --array=0-4   slurm/array.sbatch cleanrl <run_id>
+#   sbatch -A <account> --array=0-229 slurm/array.sbatch mappo <run_id>
+#   sbatch -A <account> --array=0-9   slurm/array.sbatch cleanrl <run_id>
 #SBATCH --job-name=pareto-marl
 #SBATCH --partition=bem2-cpu-short
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4gb
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --output=logs/%x_%A_%a.out
 
 set -euo pipefail
 
 mode="${1:?usage: array.sbatch <mappo|cleanrl> <run_id> [total_steps]}"
 run_id="${2:?usage: array.sbatch <mappo|cleanrl> <run_id> [total_steps]}"
-total_steps="${3:-1000000}"
+total_steps="${3:-3000000}"
 index="${SLURM_ARRAY_TASK_ID:?submit with --array}"
 
 export OMP_NUM_THREADS=1

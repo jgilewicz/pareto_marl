@@ -253,3 +253,29 @@ tensorboard.
 3. Izolacja efektu obserwacji: każdy aktor widzi pełny stan.
 4. Multi-fidelity (successive halving) zamiast stałego T.
 5. Fizyka na GPU (MJX / MuJoCo Playground).
+
+---
+
+## 12. Run v2 (po NO-GO w v1)
+
+v1 (1M kroków, obs 105, 5 seedów): NO-GO, ale polityki słabo wytrenowane
+(v ≈ 0.6 m/s, CleanRL też ~450 zwrotu). v2 powtarza ten sam design i regułę,
+zmienia tylko warunki treningu:
+
+| | v1 | v2 |
+| --- | --- | --- |
+| obserwacja `Ant-v5` | 105 (z siłami kontaktu) | 27 (`include_cfrc_ext_in_observation=False`) |
+| kategorie lokalne MaMuJoCo | domyślne (`cfrc_ext` w głębokości 0) | `[["qpos", "qvel"], ["qpos"]]` |
+| T | 1M | 3M |
+| seedy | 0–4 | 0–9 |
+| taski | 115 + 5 CleanRL | 230 + 10 CleanRL |
+
+f2 w v2 (zakresy dalej rozłączne):
+
+| K | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| f2 min | 6 480 | 11 536 | 16 592 | 21 648 | 26 704 | 31 888 | 37 072 | 42 256 |
+| f2 max | 6 480 | 11 920 | 17 104 | 22 288 | 27 472 | 32 400 | 37 328 | 42 256 |
+
+Weryfikacja: `obs[a] == state()[idx_a]` po 20 krokach i `state()` == obs
+`Ant-v5` bez sił kontaktu, dla 6 partycji. v1 odtwarzalne z commitu `a3d54a7`.

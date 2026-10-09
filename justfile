@@ -25,15 +25,15 @@ venv:
 # first, middle and last MAPPO task + one CleanRL task at 50k steps
 smoke-wcss:
     mkdir -p logs
-    sbatch -A {{account}} --array=0,57,114 --time=0:30:00 \
+    sbatch -A {{account}} --array=0,115,229 --time=0:30:00 \
         slurm/array.sbatch mappo smoke 51200
     sbatch -A {{account}} --array=0 --time=0:30:00 \
         slurm/array.sbatch cleanrl smoke 51200
 
 submit run_id:
     mkdir -p logs
-    sbatch -A {{account}} --array=0-114 slurm/array.sbatch mappo {{run_id}}
-    sbatch -A {{account}} --array=0-4 slurm/array.sbatch cleanrl {{run_id}}
+    sbatch -A {{account}} --array=0-229 slurm/array.sbatch mappo {{run_id}}
+    sbatch -A {{account}} --array=0-9 slurm/array.sbatch cleanrl {{run_id}}
 
 results run_id:
     ls {{pd}}/results/{{run_id}} | wc -l

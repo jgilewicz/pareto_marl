@@ -15,6 +15,9 @@ with contextlib.redirect_stderr(io.StringIO()):
 
 N_ACTUATORS = 8
 HIDDEN = 64
+# contact forces (78 of 105 dims) are left out of every observation
+ANT_KWARGS: dict[str, Any] = {"include_cfrc_ext_in_observation": False}
+LOCAL_CATEGORIES = [["qpos", "qvel"], ["qpos"]]
 
 Partition = tuple[int, ...]
 
@@ -86,7 +89,12 @@ def make_ma_env(x: Partition, obsk: int = 1) -> Any:
     ]
     factorization = {"partition": blocks, "edges": edges, "globals": globals_}
     return mamujoco_v1.parallel_env(
-        "Ant", "custom", agent_obsk=obsk, agent_factorization=factorization
+        "Ant",
+        "custom",
+        agent_obsk=obsk,
+        agent_factorization=factorization,
+        local_categories=LOCAL_CATEGORIES,
+        **ANT_KWARGS,
     )
 
 

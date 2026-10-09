@@ -13,7 +13,7 @@ from pareto_marl.partition import (
 )
 
 DESIGN_PATH = Path("configs/design.json")
-N_SEEDS = 5
+N_SEEDS = 10
 N_RANDOM_PER_K = 8
 RANDOM_KS = (2, 4)
 

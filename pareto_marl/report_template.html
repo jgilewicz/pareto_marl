@@ -366,7 +366,7 @@ function renderCurves() {
   const ck = DATA.cleanrl_check;
   sec.innerHTML = `<div class="head"><h2>Training curves</h2>
     <p class="muted">Mean episodic training return in ${fmt(20480 / 1000, 1)}k-step bins, averaged over
-      all runs with the same K (MAPPO) or over the five CleanRL seeds. Training returns include
+      all runs with the same K (MAPPO) or over the ${DATA.meta.n_cleanrl} CleanRL seeds. Training returns include
       exploration noise, so they sit below the deterministic evaluation returns.</p></div>
     <div class="series-legend">${names.map(n => `<span><i class="swatch" style="background:${colour(n)}"></i>${n}</span>`).join("")}</div>`;
   const panel = el("div", {class: "panel"});
@@ -426,7 +426,7 @@ function renderMethod() {
         diagonals, hips/ankles) and eight random ones; for K=4 the per-leg split and eight random ones.
         Random partitions are drawn uniformly among all partitions with that K.</li>
       <li>MAPPO: CleanRL's continuous PPO with the actor split into K independent Gaussian actors on
-        local observations (MaMuJoCo, agent_obsk=1), one critic on the full 105-dim state,
+        local observations (MaMuJoCo, agent_obsk=1), one critic on the full state,
         per-agent clipped ratios summed over agents. Hyperparameters fixed, not tuned.</li>
       <li>Evaluation: 10 episodes with the mean action, observation statistics frozen from training.</li>
       <li>ICC(1) = (MSB − MSW) / (MSB + (n−1)·MSW) with n seeds per partition.</li>
