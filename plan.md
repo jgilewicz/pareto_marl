@@ -187,12 +187,12 @@ wall_time_s
   Indeks tasku i → partycja `i // 5`, seed `i % 5` z `configs/design.json`.
 - Brak puli procesów, cache i logiki wznawiania: brakujące wyniki = ponowne
   wysłanie brakujących indeksów (`--array=...`).
-- Python 3.13 zarządzany przez `uv` (bez modułów), venv na PD
-  (`UV_PROJECT_ENVIRONMENT`), budowany na węźle logowania.
+- Grant `hpc-danbor2008-1756464546` (Koło Naukowe Solvro).
+- Python 3.13 zarządzany przez `uv` (bez modułów), venv `.venv` w repo w
+  `$HOME` (PD grantu blisko limitu plików), budowany na węźle logowania.
 - Wyniki: JSON per run do `$TMPDIR`, kopiowane na PD w pułapce `EXIT`.
-- wandb: projekt `marl-partition-moo`, `group = RUN_ID`, run per task
-  (`job_type` = `mappo` lub `cleanrl`). `WANDB_MODE=offline` jeśli węzły nie
-  mają internetu, potem `wandb sync` z węzła logowania.
+- wandb online (węzły mają internet): projekt `marl-partition-moo`,
+  `group = RUN_ID`, run per task (`job_type` = `mappo` lub `cleanrl`).
 - Koszt: 120 tasków × 1 rdzeń × ~1 h ≈ 120 rdzeniogodzin (zmierzyć w smoke
   teście i poprawić).
 
@@ -202,10 +202,10 @@ wall_time_s
 
 1. Lokalnie: `just check`, `just smoke` (zmierzone: 2.4–4k SPS na M-series,
    1M kroków ≈ 4–7 min).
-2. WCSS: `uv` + klon w `$HOME`, `just venv <account>`, `preflight.sh`,
-   `just smoke-wcss <account>` (3 taski MAPPO + 1 CleanRL × 50k).
-3. Pełny run: `just submit <account> <run_id>` (115 + 5 tasków).
-4. `just sync`, `just analyze <katalog wyników>` → `verdict.json`,
+2. WCSS: klon w `~/workspace/pareto_marl`, `just venv`, `preflight.sh`,
+   `just smoke-wcss` (3 taski MAPPO + 1 CleanRL × 50k).
+3. Pełny run: `just submit <run_id>` (115 + 5 tasków).
+4. `just analyze <katalog wyników>` → `verdict.json`,
    `partitions.csv`, `front.png`, werdykt GO / NO-GO.
 
 ---

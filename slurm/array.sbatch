@@ -1,6 +1,7 @@
 #!/bin/bash
-# usage: sbatch -A <account> --array=0-114 slurm/array.sbatch mappo <run_id>
-#        sbatch -A <account> --array=0-4   slurm/array.sbatch cleanrl <run_id>
+# submit from the repo root (venv in .venv, outputs in logs/):
+#   sbatch -A <account> --array=0-114 slurm/array.sbatch mappo <run_id>
+#   sbatch -A <account> --array=0-4   slurm/array.sbatch cleanrl <run_id>
 #SBATCH --job-name=pareto-marl
 #SBATCH --partition=bem2-cpu-short
 #SBATCH --cpus-per-task=1
@@ -18,20 +19,17 @@ index="${SLURM_ARRAY_TASK_ID:?submit with --array}"
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export PYTHONNOUSERSITE=1
-export WANDB_MODE="${WANDB_MODE:-offline}"
 export WANDB_DIR="$TMPDIR"
 
-pd="/lustre/pd03/${SLURM_JOB_ACCOUNT}/pareto_marl"
-out="$pd/results/$run_id"
-# shellcheck source=/dev/null  # venv exists only on the cluster PD
-source "$pd/venv/bin/activate"
+repo="${SLURM_SUBMIT_DIR:?run under sbatch}"
+# PD of this service is near its file quota: only result JSONs go there
+out="/lustre/pd03/${SLURM_JOB_ACCOUNT}/pareto_marl/results/$run_id"
+# shellcheck source=/dev/null  # venv is built on the cluster by uv sync
+source "$repo/.venv/bin/activate"
 
 copy_out() {
-  mkdir -p "$out" "$pd/wandb/$run_id"
+  mkdir -p "$out"
   cp "$TMPDIR"/results/*.json "$out/" 2>/dev/null || true
-  if [ -d "$TMPDIR/wandb" ]; then
-    cp -r "$TMPDIR"/wandb/offline-run-* "$pd/wandb/$run_id/" 2>/dev/null || true
-  fi
   echo "finished $(date -Is) -> $out"
 }
 trap copy_out EXIT
@@ -45,7 +43,6 @@ mappo)
     --total-steps "$total_steps" --out "$TMPDIR/results"
   ;;
 cleanrl)
-  repo="$PWD"
   cd "$TMPDIR"
   python "$repo/reference/cleanrl_ppo_continuous_action.py" \
     --env-id Ant-v5 --seed "$index" --total-timesteps "$total_steps" \

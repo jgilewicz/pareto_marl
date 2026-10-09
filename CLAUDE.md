@@ -12,5 +12,6 @@
 - `gymnasium_robotics` prints an Adroit notice on import; `partition.py`
   silences it with `redirect_stderr`.
 - `reference/` is vendored CleanRL, excluded from ruff and ty.
-- WCSS: `bem2-cpu-short`, 1 core per task, results in PD
-  (`/lustre/pd03/<account>/pareto_marl`), wandb offline by default.
+- WCSS: grant `hpc-danbor2008-1756464546`, `bem2-cpu-short`, 1 core per
+  task, wandb online. Venv in the repo `.venv` in `$HOME`: the grant's PD is
+  near its file quota, only result JSONs go to PD.
