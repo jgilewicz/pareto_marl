@@ -37,3 +37,6 @@ submit run_id:
 
 results run_id:
     ls {{pd}}/results/{{run_id}} | wc -l
+
+report dir out:
+    uv run python -m pareto_marl.report {{dir}} --out {{out}}
