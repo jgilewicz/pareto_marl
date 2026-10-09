@@ -51,7 +51,6 @@
   tolerance 1e-8, so MJX always ran all 100/50. One-step qvel vs 100/50 over
   100 random steps: max |Δ| 1.9e-6 (n_segs 2), 1.3e-5 (16); 4/8 deviates
   (4.5 at 16). ~2× env steps/s on CPU.
-- Port gates are scripts in `gates/`, run once, output in the PR (no pytest).
 - JAX MAPPO = torch `mappo.py` (v2); actors padded to the partition max:
   padded obs inputs are zeroed, padded action slots are masked in
   log-prob/entropy and never gathered into the env action, so padded
@@ -63,3 +62,4 @@
 - A seed's result depends on the vmap batch it runs in (ulp-level diffs in
   batched matmuls grow chaotically); the same call is bitwise reproducible
   on CPU, so keep the seed set per compiled program fixed.
+- Port gates are scripts in `gates/`, run once, output in the PR (no pytest).

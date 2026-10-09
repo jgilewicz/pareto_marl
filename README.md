@@ -41,10 +41,6 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   - `structured_partitions(n_segs)`: `single`, `segment`, `leg`, `joint`
   - `make_many_segment_env(x)`, `PartitionSpec.build_many_segment(x)`:
     MaMuJoCo agent obs/action indices, with the ManySegmentAnt nodes fixed
-- `gates/` — port gates, run once from the repo root, output goes in the PR
-  - `uv run python gates/physics.py` — MJX vs Ant-v5 (MuJoCo C), n_segs 2, 16
-  - `uv run python gates/indices.py` — agent indices vs MuJoCo names
-  - `uv run python gates/throughput.py` — `jit(vmap(step))`, 8 envs
 - `pareto_marl/networks/actor_critic.py` — K actors `vmap`ped over a
   leading agent axis, obs/actions padded to the partition max and masked;
   shared critic; hand-written per-agent Gaussian log-prob/entropy
@@ -58,6 +54,10 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   program for several seeds + compile time and steps/s
   - output: eval mean/std raw return, eval `x_velocity`, per-iteration
     sum/count of finished episodes' raw returns, mean losses per iteration
+- `gates/` — port gates, run once from the repo root, output goes in the PR
+  - `uv run python gates/physics.py` — MJX vs Ant-v5 (MuJoCo C), n_segs 2, 16
+  - `uv run python gates/indices.py` — agent indices vs MuJoCo names
+  - `uv run python gates/throughput.py` — `jit(vmap(step))`, 8 envs
 
 ## Local
 
