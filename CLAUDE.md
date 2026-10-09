@@ -15,6 +15,10 @@
 - `stage0 run` writes every seed's JSON before any wandb call; a wandb
   failure exits 1 with the JSONs intact (`stage0 log` re-logs them).
 - `analysis.py` imports only `design.py`, not the JAX runner.
+- The whole training run is one XLA program (rollout and update inside
+  `lax.scan`, no per-step host round-trip). MJX is latency-bound on the
+  H100, so `stage0.sbatch run` packs the 4 conditions of one n_segs as 4
+  processes on one GPU (no preallocation, memory fraction 0.22 each).
 - JAX/MJX port (stage 0): functional JAX, no classes for logic; flax linen
   (pure `init`/`apply`, params are pytrees, `vmap` over agents and seeds).
 - Every JAX env implements `envs/contract.py`: `reset(spec, key)`,

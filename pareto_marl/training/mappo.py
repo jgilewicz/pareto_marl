@@ -389,16 +389,22 @@ def benchmark(
     setup: Setup, spec: EnvSpec, seeds: Sequence[int], iterations: int
 ) -> dict[str, float]:
     # compile the full program, but time only `iterations` training
-    # iterations: a short run would be dominated by the 1000-step eval
+    # iterations (rollout + update): a short run would be dominated by the
+    # 1000-step eval
     seed_arr = jnp.asarray(seeds, dtype=jnp.int32)
     _, compile_s = _compile(partial(train, setup), spec, seed_arr)
     short_cfg = dataclasses.replace(
         setup.cfg, total_steps=iterations * setup.cfg.batch_size
     )
     short = dataclasses.replace(setup, cfg=short_cfg)
-    _, timing = _timed_run(
+    params, timing = _timed_run(
         short, partial(_train_iterations, short), spec, seeds
     )
+    if not all(jnp.isfinite(x).all() for x in jax.tree.leaves(params)):
+        raise FloatingPointError(
+            f"non-finite params after {iterations} training iterations: "
+            "check the env (NaN physics) or the loss before a long run"
+        )
     return {
         "compile_s": compile_s,
         "iterations_compile_s": timing["compile_s"],

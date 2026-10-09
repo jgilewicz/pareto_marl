@@ -24,8 +24,9 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
     (default `$SLURM_ARRAY_TASK_ID`), seeds 0–4 in one `jit(vmap(train))`;
     one JSON per seed, then one wandb run per seed
   - `bench --index i [--iterations 3]` — compile time of the full program
-    and env steps/s of `iterations` training iterations (no eval), plus an
-    estimate of the hours for T; prints one JSON line, writes nothing
+    and env steps/s of `iterations` full training iterations (rollout +
+    update, no eval), estimated hours for T, fails on non-finite params;
+    prints one JSON line, writes nothing
   - `log <json>...` — (re)log result JSONs to wandb
 - result JSON `stage0-n{n_segs}-{condition}-s{seed}.json`: n_segs,
   actuators, condition, partition_key, k, actor_params, seed, seeds (the
@@ -75,7 +76,9 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
   program for several seeds + compile time and steps/s, `benchmark`
   - output: eval mean/std raw return, eval `x_velocity`, per-iteration
     sum/count of finished episodes' raw returns, mean losses per iteration
-- `slurm/stage0.sbatch` — one array task per program, `run` or `bench`
+- `slurm/stage0.sbatch` — one H100 per array task; `run`/`bench`: array
+  index = n_segs index, its 4 programs as 4 concurrent processes on the
+  GPU (env is latency-bound); `run-one`/`bench-one`: array index = program
 - `gates/` — port gates, run once from the repo root, output goes in the PR
   - `uv run python gates/physics.py` — MJX vs Ant-v5 (MuJoCo C), n_segs 2, 16
   - `uv run python gates/indices.py` — agent indices vs MuJoCo names
@@ -96,11 +99,17 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
 - repo in `~/workspace/pareto_marl`, `just venv` builds `.venv` there
   (PD of this grant is near its file quota, so no venv on PD); the login
   node has no AVX: build the venv there, never import
-- `slurm/stage0.sbatch`: `lem-gpu`, 1 × H100, 4 cores, 32 GB, 12 h default
-- `just bench-wcss [array] [iterations]` — GPU throughput gate, one task per
-  program, JSON line per task in `logs/`
-- `just smoke-wcss` — programs 0 and 15 at 2 iterations, to PD `results/smoke`
-- `just submit <run_id> [time]` — 16 tasks, wandb online
+- `slurm/stage0.sbatch`: `lem-gpu`, 1 × H100, 4 cores, 64 GB, 12 h default;
+  `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `MEM_FRACTION=0.22` so 4 JAX
+  processes share the GPU; per-program logs `logs/stage0_<job>_<task>_p<i>.out`;
+  any failed program fails the task, results still copied
+- `just bench-wcss [array] [iterations]` — GPU gate, 4 packed programs per
+  n_segs, one JSON line per program
+- `just smoke-wcss` — n_segs 2 and 16 packed, 2 iterations, to PD
+  `results/smoke`
+- `just submit <run_id> [array] [time]` — 4 tasks (one per n_segs), wandb
+  online; size `time` per n_segs from the bench
+- `just rerun <run_id> <programs> [time]` — single programs (`run-one`)
 - results: `/lustre/pd03/hpc-danbor2008-1756464546/pareto_marl/results/<run_id>/`
   (80 JSONs, copied from `$TMPDIR` by the EXIT trap)
 - wandb failure after training: JSONs are written first; the task exits 1,

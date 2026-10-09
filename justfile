@@ -30,23 +30,29 @@ analyze dir:
 venv:
     uv sync --frozen --no-dev
 
-# GPU throughput gate: one bench task per program, output in logs/
-bench-wcss array="0-15" iterations="3":
+# GPU gate: per n_segs its 4 programs packed on one GPU, JSON lines in logs/
+bench-wcss array="0-3" iterations="3":
     mkdir -p logs
     sbatch -A {{account}} --array={{array}} --time=0:30:00 \
         slurm/stage0.sbatch bench {{iterations}}
 
-# smallest and largest program, 2 iterations, JSON to PD results/smoke
+# n_segs 2 and 16 packed, 2 iterations, JSON to PD results/smoke
 smoke-wcss:
     mkdir -p logs
-    sbatch -A {{account}} --array=0,15 --time=0:30:00 \
+    sbatch -A {{account}} --array=0,3 --time=1:00:00 \
         slurm/stage0.sbatch run smoke 4096
 
-# set time from the bench-wcss estimate (slowest program + margin)
-submit run_id time="12:00:00":
+# array index = n_segs index; set time per n_segs from bench-wcss
+submit run_id array="0-3" time="12:00:00":
     mkdir -p logs
-    sbatch -A {{account}} --array=0-15 --time={{time}} \
+    sbatch -A {{account}} --array={{array}} --time={{time}} \
         slurm/stage0.sbatch run {{run_id}}
+
+# single programs (0..15, e.g. "6,13"), one process per GPU
+rerun run_id programs time="12:00:00":
+    mkdir -p logs
+    sbatch -A {{account}} --array={{programs}} --time={{time}} \
+        slurm/stage0.sbatch run-one {{run_id}}
 
 results run_id:
     ls {{pd}}/results/{{run_id}} | wc -l
