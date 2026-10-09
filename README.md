@@ -107,9 +107,12 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
   n_segs, one JSON line per program
 - `just smoke-wcss` — n_segs 2 and 16 packed, 2 iterations, to PD
   `results/smoke`
-- `just submit <run_id> [array] [time]` — 4 tasks (one per n_segs), wandb
-  online; size `time` per n_segs from the bench
-- `just rerun <run_id> <programs> [time]` — single programs (`run-one`)
+- `just submit <run_id> [array] [time=60:00:00]` — 4 tasks (one per
+  n_segs), wandb online; `lem-gpu` resolves to `lem-gpu-short` (3 d cap)
+- `just rerun <run_id> <programs> [time=60:00:00]` — single programs
+  (`run-one`)
+- no checkpoint: JSONs are written only when training ends, so a task that
+  hits its time limit loses all its programs; size `time` from the bench
 - results: `/lustre/pd03/hpc-danbor2008-1756464546/pareto_marl/results/<run_id>/`
   (80 JSONs, copied from `$TMPDIR` by the EXIT trap)
 - wandb failure after training: JSONs are written first; the task exits 1,

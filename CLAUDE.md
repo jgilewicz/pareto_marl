@@ -14,6 +14,9 @@
   (`design.py`); seeds 0–4 always run together in one `jit(vmap(train))`.
 - `stage0 run` writes every seed's JSON before any wandb call; a wandb
   failure exits 1 with the JSONs intact (`stage0 log` re-logs them).
+- No checkpoint (one XLA program): results exist only after training;
+  a SLURM TIMEOUT loses every program of the task. Keep `--time` above
+  the bench estimate (`just submit` default 60 h, 3 d partition cap).
 - `analysis.py` imports only `design.py`, not the JAX runner.
 - The whole training run is one XLA program (rollout and update inside
   `lax.scan`, no per-step host round-trip). MJX is latency-bound on the

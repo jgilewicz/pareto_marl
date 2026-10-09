@@ -43,13 +43,13 @@ smoke-wcss:
         slurm/stage0.sbatch run smoke 4096
 
 # array index = n_segs index; set time per n_segs from bench-wcss
-submit run_id array="0-3" time="12:00:00":
+submit run_id array="0-3" time="60:00:00":
     mkdir -p logs
     sbatch -A {{account}} --array={{array}} --time={{time}} \
         slurm/stage0.sbatch run {{run_id}}
 
 # single programs (0..15, e.g. "6,13"), one process per GPU
-rerun run_id programs time="12:00:00":
+rerun run_id programs time="60:00:00":
     mkdir -p logs
     sbatch -A {{account}} --array={{programs}} --time={{time}} \
         slurm/stage0.sbatch run-one {{run_id}}
