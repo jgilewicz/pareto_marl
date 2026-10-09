@@ -30,6 +30,19 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   - `finish_step`: truncation, bookkeeping, gymnasium `SAME_STEP` autoreset
 - `pareto_marl/envs/dummy.py` — damped point mass on the contract, for
   developing the trainer without MJX
+- `pareto_marl/networks/actor_critic.py` — K actors `vmap`ped over a
+  leading agent axis, obs/actions padded to the partition max and masked;
+  shared critic; hand-written per-agent Gaussian log-prob/entropy
+  - `build_layout(obs_idx, act_idx, obs_dim, action_dim)` — same index
+    lists as `PartitionSpec`; checks each actuator is owned exactly once
+- `pareto_marl/losses/ppo.py` — MAPPO loss (per-agent clip, sum over agents)
+- `pareto_marl/utils/normalize.py` — gymnasium 1.4 `NormalizeObservation` /
+  `NormalizeReward` + clip ±10, per env
+- `pareto_marl/training/mappo.py` — `PPOConfig` (v2 values), `train(setup,
+  spec, seed)` jit/vmap-able over seeds, `train_seeds` = one compiled
+  program for several seeds + compile time and steps/s
+  - output: eval mean/std raw return, eval `x_velocity`, per-iteration
+    sum/count of finished episodes' raw returns, mean losses per iteration
 
 ## Local
 
