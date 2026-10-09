@@ -193,8 +193,11 @@ wall_time_s
 - Wyniki: JSON per run do `$TMPDIR`, kopiowane na PD w pułapce `EXIT`.
 - wandb online (węzły mają internet): projekt `marl-partition-moo`,
   `group = RUN_ID`, run per task (`job_type` = `mappo` lub `cleanrl`).
-- Koszt: 120 tasków × 1 rdzeń × ~1 h ≈ 120 rdzeniogodzin (zmierzyć w smoke
-  teście i poprawić).
+- Koszt (zmierzony w smoke teście na Bem2, 51k kroków: 82 s dla K = 1,
+  89 s dla K = 2, 120 s dla K = 8): 1M kroków ≈ 27–39 min na task,
+  120 tasków ≈ 62 rdzeniogodziny, ściana ≈ 40 min przy wszystkich naraz.
+- Węzeł logowania to VM bez AVX: `import mujoco` tam pada
+  (`Illegal instruction`), na węzłach obliczeniowych działa.
 
 ---
 
