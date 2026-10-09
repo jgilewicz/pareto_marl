@@ -15,9 +15,25 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
 - `reference/cleanrl_ppo_continuous_action.py` — CleanRL ported to gymnasium 1.x
 - `slurm/array.sbatch` — array task, `mappo` or `cleanrl` mode
 
+### JAX/MJX port (stage 0, `plan_stage0.md`)
+
+- functional JAX, no classes for logic: `envs/`, `networks/`, `losses/`,
+  `training/`, `utils/`
+- `pareto_marl/envs/contract.py` — env contract shared by all JAX envs
+  - `EnvSpec`: static `obs_dim`, `action_dim`, `episode_length` + `params`
+    (env-specific pytree, e.g. `mjx.Model`)
+  - `EnvState`: opaque `physics`, raw float32 `obs`, `reward`,
+    `terminated`, `done` (terminated or truncated),
+    `metrics` (`x_velocity`), episode return/length bookkeeping
+  - `reset(spec, key)`, `step(spec, state, action, key)`: single env, the
+    trainer batches with `jax.vmap`
+  - `finish_step`: truncation, bookkeeping, gymnasium `SAME_STEP` autoreset
+- `pareto_marl/envs/dummy.py` — damped point mass on the contract, for
+  developing the trainer without MJX
+
 ## Local
 
-- `uv sync`
+- `uv sync` — JAX CPU on macOS, `jax[cuda12]` on Linux
 - `just check` — ruff, format, ty
 - `just smoke` — 20k-step run of task 0
 
