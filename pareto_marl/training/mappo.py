@@ -1,6 +1,6 @@
 import dataclasses
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import cast
@@ -322,6 +322,16 @@ def _init_runner(setup: Setup, spec: EnvSpec, key: jax.Array) -> Runner:
     )
 
 
+def _train_iterations(setup: Setup, spec: EnvSpec, seed: jax.Array) -> Params:
+    runner = _init_runner(setup, spec, jax.random.key(seed))
+    runner, _ = jax.lax.scan(
+        lambda r, _: _iteration(setup, spec, r),
+        runner,
+        length=setup.cfg.num_iterations,
+    )
+    return runner.params
+
+
 def train(setup: Setup, spec: EnvSpec, seed: jax.Array) -> TrainOutput:
     runner = _init_runner(setup, spec, jax.random.key(seed))
     runner, (curve_sum, curve_episodes, losses) = jax.lax.scan(
@@ -339,14 +349,23 @@ def train(setup: Setup, spec: EnvSpec, seed: jax.Array) -> TrainOutput:
     )
 
 
-def train_seeds(
-    setup: Setup, spec: EnvSpec, seeds: Sequence[int]
-) -> tuple[TrainOutput, dict[str, float]]:
-    fn = jax.jit(jax.vmap(partial(train, setup), in_axes=(None, 0)))
-    seed_arr = jnp.asarray(seeds, dtype=jnp.int32)
+def _compile[T](
+    fn: Callable[[EnvSpec, jax.Array], T], spec: EnvSpec, seeds: jax.Array
+) -> tuple[Callable[[EnvSpec, jax.Array], T], float]:
     start = time.perf_counter()
-    compiled = fn.lower(spec, seed_arr).compile()
-    compile_s = time.perf_counter() - start
+    compiled = jax.jit(jax.vmap(fn, in_axes=(None, 0))).lower(spec, seeds)
+    compiled = compiled.compile()
+    return compiled, time.perf_counter() - start
+
+
+def _timed_run[T](
+    setup: Setup,
+    fn: Callable[[EnvSpec, jax.Array], T],
+    spec: EnvSpec,
+    seeds: Sequence[int],
+) -> tuple[T, dict[str, float]]:
+    seed_arr = jnp.asarray(seeds, dtype=jnp.int32)
+    compiled, compile_s = _compile(fn, spec, seed_arr)
     start = time.perf_counter()
     out = jax.block_until_ready(compiled(spec, seed_arr))
     run_s = time.perf_counter() - start
@@ -358,3 +377,31 @@ def train_seeds(
         "steps_per_s": env_steps / run_s,
     }
     return out, timing
+
+
+def train_seeds(
+    setup: Setup, spec: EnvSpec, seeds: Sequence[int]
+) -> tuple[TrainOutput, dict[str, float]]:
+    return _timed_run(setup, partial(train, setup), spec, seeds)
+
+
+def benchmark(
+    setup: Setup, spec: EnvSpec, seeds: Sequence[int], iterations: int
+) -> dict[str, float]:
+    # compile the full program, but time only `iterations` training
+    # iterations: a short run would be dominated by the 1000-step eval
+    seed_arr = jnp.asarray(seeds, dtype=jnp.int32)
+    _, compile_s = _compile(partial(train, setup), spec, seed_arr)
+    short_cfg = dataclasses.replace(
+        setup.cfg, total_steps=iterations * setup.cfg.batch_size
+    )
+    short = dataclasses.replace(setup, cfg=short_cfg)
+    _, timing = _timed_run(
+        short, partial(_train_iterations, short), spec, seeds
+    )
+    return {
+        "compile_s": compile_s,
+        "iterations_compile_s": timing["compile_s"],
+        "iterations_run_s": timing["run_s"],
+        "steps_per_s": timing["steps_per_s"],
+    }

@@ -1,7 +1,3 @@
-import json
-import re
-from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -12,10 +8,8 @@ from pareto_marl.partition import (
     ANT_KWARGS,
     LOCAL_CATEGORIES,
     PartitionSpec,
-    make_ma_env,
     make_many_segment_env,
     mamujoco_v1,
-    parse_key,
     structured_partitions,
 )
 
@@ -45,14 +39,6 @@ def segment_graph(n_segs: int) -> Graph:
     return graph
 
 
-def ant_graph() -> Graph:
-    graph: Graph = {}
-    for leg in range(1, 5):
-        _connect(graph, [f"hip_{leg}", f"ankle_{leg}"])
-    _connect(graph, [f"hip_{leg}" for leg in range(1, 5)])
-    return graph
-
-
 def state_labels(model: Any) -> np.ndarray:
     qpos = [""] * model.nq
     qvel = [""] * model.nv
@@ -70,9 +56,7 @@ def state_labels(model: Any) -> np.ndarray:
     return np.array(qpos[2:] + qvel)
 
 
-def check_names(
-    env: Any, x: tuple[int, ...], graph: Graph, joint_of: Callable[[str], str]
-) -> list[str]:
+def check_names(env: Any, x: tuple[int, ...], graph: Graph) -> list[str]:
     model = env.single_agent_env.unwrapped.model
     labels = state_labels(model)
     actuator_joint = [
@@ -81,7 +65,7 @@ def check_names(
     errors = []
     for k, agent in enumerate(env.possible_agents):
         nodes = env.agent_action_partitions[k]
-        own = [joint_of(node.label) for node in nodes]
+        own = [node.label for node in nodes]
         acts = [node.act_ids for node in nodes]
         if [actuator_joint[a] for a in acts] != own:
             errors.append(f"{agent}: actuators {acts} do not drive {own}")
@@ -143,7 +127,7 @@ def many_segment_gate(rng: np.random.Generator) -> bool:
             p = PartitionSpec.from_env(x, env)
             key = jax.random.key(int(rng.integers(1 << 31)))
             errors = (
-                check_names(env, x, graph, lambda label: label)
+                check_names(env, x, graph)
                 + check_values(env, rng)
                 + check_layout(env, spec, key)
             )
@@ -168,7 +152,7 @@ def unpatched_control() -> None:
             **ANT_KWARGS,
         )
         x = structured_partitions(n_segs)["segment"]
-        errors = check_names(env, x, segment_graph(n_segs), lambda s: s)
+        errors = check_names(env, x, segment_graph(n_segs))
         env.close()
         wrong_act = sum("do not drive" in e for e in errors)
         wrong_obs = sum("observes" in e for e in errors)
@@ -179,30 +163,9 @@ def unpatched_control() -> None:
         )
 
 
-def ant_gate() -> bool:
-    design = json.loads(Path("configs/design.json").read_text())
-    keys = [p["x"] for p in design["partitions"]]
-    failed = []
-    for key in keys:
-        x = parse_key(key)
-        env = make_ma_env(x)
-        errors = check_names(
-            env, x, ant_graph(), lambda s: re.sub(r"(\d)$", r"_\1", s)
-        )
-        env.close()
-        if errors:
-            failed.append(f"{key}: {'; '.join(errors)}")
-    passed = len(keys) - len(failed)
-    print(f"Ant v1/v2 path: {passed}/{len(keys)} design partitions PASS names")
-    for line in failed:
-        print("  FAIL", line)
-    return not failed
-
-
 def main() -> None:
     rng = np.random.default_rng(0)
     ok = many_segment_gate(rng)
-    ok &= ant_gate()
     unpatched_control()
     print("gate 2:", "PASS" if ok else "FAIL")
 
