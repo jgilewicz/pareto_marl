@@ -33,3 +33,17 @@
 - WCSS: grant `hpc-danbor2008-1756464546`, `bem2-cpu-short`, 1 core per
   task, wandb online. Venv in the repo `.venv` in `$HOME`: the grant's PD is
   near its file quota, only result JSONs go to PD.
+- ManySegmentAnt: gymnasium-robotics 1.4.2 `get_parts_and_edges` has wrong
+  qpos/qvel ids (all but the last segment point into the root joint),
+  act_ids that swap the two legs of a segment, and deepcopied
+  inter-segment edges (one-way, duplicated neighbours); `partition.py`
+  `many_segment_graph` fixes the nodes and edges before passing them as
+  `agent_factorization`. `gates/indices.py` checks against MuJoCo names.
+- `many_segment_ant.py` reads `x_velocity` from `xpos` of `torso_0` like
+  `Ant-v5` (no `mj_forward` after the step: xpos of the last RK4 stage), so
+  `reset` runs one `mjx.forward`.
+- Pyramidal cone kept (`Ant-v5`): MJX matches MuJoCo C exactly until the
+  first contact, then diverges; MJX and C pick different tangent frames for
+  capsule–plane contacts, so the friction pyramid rotates. With elliptic
+  cones both agree (gate 1), so the integration itself matches.
+- Port gates are scripts in `gates/`, run once, output in the PR (no pytest).

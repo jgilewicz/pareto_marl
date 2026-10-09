@@ -30,6 +30,20 @@ more than seed noise? GO / NO-GO experiment, design in `plan.md`.
   - `finish_step`: truncation, bookkeeping, gymnasium `SAME_STEP` autoreset
 - `pareto_marl/envs/dummy.py` — damped point mass on the contract, for
   developing the trainer without MJX
+- `pareto_marl/envs/many_segment_ant.py` — ManySegmentAnt (MaMuJoCo
+  `gen_asset`, 4 actuators per segment) on MJX
+  - `make_spec(n_segs)`: `params` = `AntParams` (mjx model, init qpos/qvel)
+  - task = `Ant-v5` on that XML without contact cost: frame_skip 5, obs
+    `qpos[2:]`, `qvel`, reward x_velocity(`torso_0`) + 1 − 0.5·‖a‖²,
+    terminated when z ∉ [0.2, 1] or state not finite
+- `pareto_marl/partition.py` (ManySegmentAnt)
+  - `structured_partitions(n_segs)`: `single`, `segment`, `leg`, `joint`
+  - `make_many_segment_env(x)`, `PartitionSpec.build_many_segment(x)`:
+    MaMuJoCo agent obs/action indices, with the ManySegmentAnt nodes fixed
+- `gates/` — port gates, run once from the repo root, output goes in the PR
+  - `uv run python gates/physics.py` — MJX vs Ant-v5 (MuJoCo C), n_segs 2, 16
+  - `uv run python gates/indices.py` — agent indices vs MuJoCo names
+  - `uv run python gates/throughput.py` — `jit(vmap(step))`, 8 envs
 
 ## Local
 
