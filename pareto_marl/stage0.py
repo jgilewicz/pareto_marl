@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 from dataclasses import asdict
@@ -16,10 +15,11 @@ import wandb
 from pareto_marl.design import (
     CONDITIONS,
     INDICES_PATH,
-    REPO,
     SEEDS,
     SIZES,
     TOTAL_STEPS,
+    git_commit,
+    load_program,
 )
 from pareto_marl.envs import many_segment_ant
 from pareto_marl.envs.contract import EnvSpec
@@ -78,22 +78,6 @@ def write_indices(path: Path) -> None:
     print(f"wrote {path}")
 
 
-def load_program(index: int, path: Path = INDICES_PATH) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(
-            f"{path} missing: run `just indices` locally and commit it "
-            "(never on the cluster, MaMuJoCo writes into site-packages)"
-        )
-    programs = json.loads(path.read_text())
-    if not 0 <= index < len(programs):
-        raise IndexError(
-            f"program index {index} out of range: {path} has "
-            f"{len(programs)} programs (0..{len(programs) - 1}); "
-            "pass --index or submit as a SLURM array"
-        )
-    return programs[index]
-
-
 def make_setup(
     program: dict[str, Any], total_steps: int
 ) -> tuple[Setup, EnvSpec]:
@@ -111,16 +95,6 @@ def make_setup(
         step=many_segment_ant.step,
     )
     return setup, spec
-
-
-def git_commit() -> str:
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
-        ).stdout.strip()
-
-    commit = git("rev-parse", "HEAD")
-    return commit + ("-dirty" if git("status", "--porcelain") else "")
 
 
 def learning_curve(

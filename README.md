@@ -8,6 +8,48 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
   reports in `experiments/`; code reproducible from commit `52a7a0a` (v2)
   and `a3d54a7` (v1)
 
+## Stage-0 runner of record: CPU
+
+- MuJoCo C + torch MAPPO (v2 algorithm), 80 independent one-core runs in
+  one SLURM array (`slurm/stage0_cpu.sbatch`, `just submit-cpu`)
+- MJX/GPU path (below) is too slow at 8 envs per seed: latency-bound,
+  sequential PPO updates; the s0v1 run was cancelled after 12.7 h with no
+  results. MuJoCo C on one M4 core (random actions): 8064 / 4883 / 2289 /
+  1542 env steps/s for n_segs 2 / 4 / 8 / 16. Code kept, not deleted.
+- `pareto_marl/mappo_torch.py` — v2 MAPPO (`52a7a0a`) for any actuator
+  count: `Agents(obs_idx, act_idx)` per-agent index lists, CleanRL wrappers,
+  `SAME_STEP` autoreset, critic built first, per-agent ratios summed, one
+  Adam, one global clip, v2 hyperparameters, T = 3M; checks at start that
+  the indices cover the env's obs dim and own each actuator once
+- env: `gymnasium.make("Ant-v5", xml_file=<gen_asset(n_segs)>,
+  include_cfrc_ext_in_observation=False)`, other Ant-v5 defaults (reward
+  keeps the contact cost); XML written to the process's own temp dir
+- `pareto_marl/stage0_cpu.py` — CLI
+  - `run --index i --out d --run-id r [--total-steps]` — task i ∈ 0..79
+    (default `$SLURM_ARRAY_TASK_ID`): program i // 5 of
+    `configs/stage0_indices.json`, seed i % 5; one JSON, then wandb
+  - `log <json>...` — (re)log result JSONs to wandb
+- result JSON `stage0-n{n_segs}-{condition}-s{seed}.json` (read by
+  `analysis.py`): n_segs, actuators, condition, partition_key, k,
+  actor_params, seed, eval_return, eval_return_std, eval_x_velocity,
+  learning_curve `[[global_step, mean train return], ...]` per iteration,
+  steps_per_s (train loop), compile_s (0), train_s, wall_s, device,
+  run_id, git_commit, config
+- wandb: `marl-partition-moo`, group = run_id, job_type `stage0-cpu`, name
+  `stage0cpu-n{n_segs}-{condition}-s{seed}`
+- local full-loop env steps/s (M4, 1 core, 2 iterations), single /
+  segment / leg / joint:
+  - n_segs 2: 4077 / 3720 / 3141 / 2440
+  - n_segs 4: 3086 / 2486 / 1979 / 1444
+  - n_segs 8: 1813 / 1382 / 1082 / 777
+  - n_segs 16: 1255 / 867 / 638 / 438
+- `--time=24:00:00`: n_segs 16 joint 1.9 h on M4, Bem2 ~5× slower per core
+  (v2: 1.15 h per 3M-step run) → ~9.5 h, >2× margin; whole array
+  ~52 core-h on M4 → ~260 CPU-h on Bem2
+- Bem2 (s0cpu1, first 150k steps): 3.5–4.6× slower than M4 per core
+  (n_segs 2 single 887, n_segs 8 segment 395 env steps/s) → n_segs 16
+  joint ~8–9.5 h
+
 ## Layout
 
 - functional JAX, no classes for logic: `envs/`, `networks/`, `losses/`,
@@ -88,6 +130,7 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
 
 - `uv sync` — JAX CPU on macOS, `jax[cuda12]` on Linux
 - `just check` — ruff, format, ty, shellcheck, shfmt
+- `just smoke-cpu` — 2 iterations of tasks 0 and 75, no wandb
 - `just indices` — rebuild `configs/stage0_indices.json` (commit it)
 - `just smoke` — 2 iterations of program 0, no wandb
 - `just bench [index] [iterations]` — compile time and env steps/s
@@ -99,6 +142,14 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
 - repo in `~/workspace/pareto_marl`, `just venv` builds `.venv` there
   (PD of this grant is near its file quota, so no venv on PD); the login
   node has no AVX: build the venv there, never import
+- `slurm/stage0_cpu.sbatch`: `bem2-cpu-short`, 1 core, 4 GB, 24 h;
+  `OMP_NUM_THREADS=1`, results in `$TMPDIR` copied by the EXIT trap to
+  PD `results/<run_id>/`, logs `logs/stage0cpu_<job>_<task>.out`
+- `just submit-cpu <run_id> [time=24:00:00]` — tasks 0–79, wandb online
+  - account cap 50 running jobs: tasks 50–79 (n_segs 8 leg/joint, all
+    of n_segs 16) wait as `MaxJobsPerAccount` until earlier tasks end
+- `just rerun-cpu <run_id> <tasks> [time]` — single tasks, same run_id
+- MJX/GPU path, kept for reference:
 - `slurm/stage0.sbatch`: `lem-gpu`, 1 × H100, 4 cores, 64 GB, 12 h default;
   `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `MEM_FRACTION=0.22` so 4 JAX
   processes share the GPU; per-program logs `logs/stage0_<job>_<task>_p<i>.out`;

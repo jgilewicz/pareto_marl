@@ -5,8 +5,18 @@
 - Python 3.13, `uv`, exact pins.
 - No tests by decision of the user; verify with `just check`, `just smoke`
   and the scripts in `gates/`.
-- v1/v2 (torch, Ant-v5) are gone from the tree; reproducible from commit
-  `52a7a0a` (v2) / `a3d54a7` (v1); `experiments/` keeps their records.
+- v1/v2 runners (torch, Ant-v5) are reproducible from commit `52a7a0a`
+  (v2) / `a3d54a7` (v1); `experiments/` keeps their records.
+- Stage-0 runner of record: CPU (`stage0_cpu.py`, `mappo_torch.py`,
+  `slurm/stage0_cpu.sbatch`): MuJoCo C `Ant-v5` on the ManySegmentAnt XML,
+  v2 torch MAPPO, task i ∈ 0..79 → program i // 5, seed i % 5, one core.
+  MJX/GPU path is too slow at 8 envs/seed (s0v1: 12.7 h, no results);
+  its code stays.
+- `stage0_cpu.py` must not import JAX: shared helpers (`load_program`,
+  `git_commit`) live in `design.py`.
+- `gen_asset` writes the XML into the process's own temp dir (kept alive
+  through eval): never MaMuJoCo's site-packages path.
+- Torch CPU wheel from the PyTorch CPU index (`torch==2.14.1`, as v2).
 - `configs/stage0_indices.json` is built once locally (`just indices`) and
   committed. MaMuJoCo writes and deletes its XML inside site-packages, so
   concurrent jobs must never call it: the runner only reads the JSON.
@@ -47,6 +57,8 @@
   the work, cores are billed), wandb online. Venv in the repo `.venv` in
   `$HOME`: the grant's PD is near its file quota, only result JSONs go to
   PD. The login node has no AVX: never import JAX there.
+- WCSS account cap: 50 running jobs (`MaxJobsPerAccount`); the 80-task
+  CPU array runs in two waves.
 - ManySegmentAnt: gymnasium-robotics 1.4.2 `get_parts_and_edges` has wrong
   qpos/qvel ids (all but the last segment point into the root joint),
   act_ids that swap the two legs of a segment, and deepcopied
