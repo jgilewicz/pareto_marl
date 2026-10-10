@@ -12,6 +12,12 @@ check:
 indices:
     uv run python -m pareto_marl.stage0 indices
 
+# 2 iterations of task 0 (n_segs 2 single) and 75 (n_segs 16 joint), no wandb
+smoke-cpu:
+    for i in 0 75; do WANDB_MODE=disabled uv run python -m \
+        pareto_marl.stage0_cpu run --index $i --run-id smoke \
+        --total-steps 4096 --out results/smoke; done
+
 # 2 iterations of program 0 (n_segs 2, single, 5 seeds), no wandb
 smoke:
     WANDB_MODE=disabled uv run python -m pareto_marl.stage0 run --index 0 \
@@ -29,6 +35,20 @@ analyze dir:
 
 venv:
     uv sync --frozen --no-dev
+
+# stage 0 of record: 80 one-core runs, task i = program i // 5, seed i % 5
+submit-cpu run_id time="24:00:00":
+    mkdir -p logs
+    sbatch -A {{account}} --array=0-79 --time={{time}} \
+        slurm/stage0_cpu.sbatch {{run_id}}
+
+# single tasks (0..79, e.g. "17,75") into the same run_id
+rerun-cpu run_id tasks time="24:00:00":
+    mkdir -p logs
+    sbatch -A {{account}} --array={{tasks}} --time={{time}} \
+        slurm/stage0_cpu.sbatch {{run_id}}
+
+# --- MJX/GPU path: too slow at 8 envs per seed, kept for reference ---
 
 # GPU gate: per n_segs its 4 programs packed on one GPU, JSON lines in logs/
 bench-wcss array="0-3" iterations="3":

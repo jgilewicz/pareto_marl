@@ -16,11 +16,20 @@ dependencies = [
     "numpy==2.5.3",
     "optax==0.2.8",
     "scipy==1.18.1",
+    "torch==2.14.1",
     "wandb==0.30.0",
 ]
 
 [dependency-groups]
 dev = ["ruff==0.16.10", "ty==0.0.85"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["uv_build==0.11.6"]
