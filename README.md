@@ -46,6 +46,9 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
 - `--time=24:00:00`: n_segs 16 joint 1.9 h on M4, Bem2 ~5× slower per core
   (v2: 1.15 h per 3M-step run) → ~9.5 h, >2× margin; whole array
   ~52 core-h on M4 → ~260 CPU-h on Bem2
+- Bem2 (s0cpu1, first 150k steps): 3.5–4.6× slower than M4 per core
+  (n_segs 2 single 887, n_segs 8 segment 395 env steps/s) → n_segs 16
+  joint ~8–9.5 h
 
 ## Layout
 
@@ -143,6 +146,8 @@ design and pre-registered GO / NO-GO rule in `plan_stage0.md`.
   `OMP_NUM_THREADS=1`, results in `$TMPDIR` copied by the EXIT trap to
   PD `results/<run_id>/`, logs `logs/stage0cpu_<job>_<task>.out`
 - `just submit-cpu <run_id> [time=24:00:00]` — tasks 0–79, wandb online
+  - account cap 50 running jobs: tasks 50–79 (n_segs 8 leg/joint, all
+    of n_segs 16) wait as `MaxJobsPerAccount` until earlier tasks end
 - `just rerun-cpu <run_id> <tasks> [time]` — single tasks, same run_id
 - MJX/GPU path, kept for reference:
 - `slurm/stage0.sbatch`: `lem-gpu`, 1 × H100, 4 cores, 64 GB, 12 h default;

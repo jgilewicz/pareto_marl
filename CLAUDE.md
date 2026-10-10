@@ -57,6 +57,8 @@
   the work, cores are billed), wandb online. Venv in the repo `.venv` in
   `$HOME`: the grant's PD is near its file quota, only result JSONs go to
   PD. The login node has no AVX: never import JAX there.
+- WCSS account cap: 50 running jobs (`MaxJobsPerAccount`); the 80-task
+  CPU array runs in two waves.
 - ManySegmentAnt: gymnasium-robotics 1.4.2 `get_parts_and_edges` has wrong
   qpos/qvel ids (all but the last segment point into the root joint),
   act_ids that swap the two legs of a segment, and deepcopied
