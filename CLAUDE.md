@@ -1,17 +1,27 @@
 # pareto-marl
 
-- Goal: GO / NO-GO on whether the actuator partition matters (plan.md §3).
-- Python 3.13, `uv`, exact pins; torch from the PyTorch CPU index.
-- No tests by decision of the user; verify with `just check` and `just smoke`.
-- `mappo.py` mirrors CleanRL `ppo_continuous_action`; for K=1 it must stay
-  equivalent (same wrappers, SAME_STEP autoreset, critic built first).
-- Per-agent PPO ratios and clipping, summed over agents; one Adam, one
-  global grad-norm clip.
-- `configs/design.json` is generated once (`just design`) and committed; array
-  task i → partition i // 5, seed i % 5.
-- `gymnasium_robotics` prints an Adroit notice on import; `partition.py`
-  silences it with `redirect_stderr`.
-- `reference/` is vendored CleanRL, excluded from ruff and ty.
+- Goal: GO / NO-GO of stage 0 (`plan_stage0.md` §1, pre-registered: do not
+  change the rule in `analysis.py`).
+- Python 3.13, `uv`, exact pins.
+- No tests by decision of the user; verify with `just check`, `just smoke`
+  and the scripts in `gates/`.
+- v1/v2 (torch, Ant-v5) are gone from the tree; reproducible from commit
+  `52a7a0a` (v2) / `a3d54a7` (v1); `experiments/` keeps their records.
+- `configs/stage0_indices.json` is built once locally (`just indices`) and
+  committed. MaMuJoCo writes and deletes its XML inside site-packages, so
+  concurrent jobs must never call it: the runner only reads the JSON.
+- Program index i → n_segs `SIZES[i // 4]`, condition `CONDITIONS[i % 4]`
+  (`design.py`); seeds 0–4 always run together in one `jit(vmap(train))`.
+- `stage0 run` writes every seed's JSON before any wandb call; a wandb
+  failure exits 1 with the JSONs intact (`stage0 log` re-logs them).
+- No checkpoint (one XLA program): results exist only after training;
+  a SLURM TIMEOUT loses every program of the task. Keep `--time` above
+  the bench estimate (`just submit` default 60 h, 3 d partition cap).
+- `analysis.py` imports only `design.py`, not the JAX runner.
+- The whole training run is one XLA program (rollout and update inside
+  `lax.scan`, no per-step host round-trip). MJX is latency-bound on the
+  H100, so `stage0.sbatch run` packs the 4 conditions of one n_segs as 4
+  processes on one GPU (no preallocation, memory fraction 0.22 each).
 - JAX/MJX port (stage 0): functional JAX, no classes for logic; flax linen
   (pure `init`/`apply`, params are pytrees, `vmap` over agents and seeds).
 - Every JAX env implements `envs/contract.py`: `reset(spec, key)`,
@@ -27,12 +37,16 @@
   are raw, normalization and reward scaling are the trainer's job.
 - `returned_episode_return/length` are valid only where
   `returned_episode == 1` (raw reward, like `RecordEpisodeStatistics`).
+- `gymnasium_robotics` prints an Adroit notice on import; silence it with
+  `contextlib.redirect_stderr`.
 - `import mujoco.mjx` prints `Failed to import warp` to stdout (unused warp
   backend); silence it with `contextlib.redirect_stdout`.
 - jax is pinned per platform: CPU on darwin, `jax[cuda12]` on linux (H100).
-- WCSS: grant `hpc-danbor2008-1756464546`, `bem2-cpu-short`, 1 core per
-  task, wandb online. Venv in the repo `.venv` in `$HOME`: the grant's PD is
-  near its file quota, only result JSONs go to PD.
+- WCSS: grant `hpc-danbor2008-1756464546`, `lem-gpu`, `--gres=gpu:hopper:1`
+  (only accepted form), `--cpus-per-task` stated and ≤ 16 (4: the GPU does
+  the work, cores are billed), wandb online. Venv in the repo `.venv` in
+  `$HOME`: the grant's PD is near its file quota, only result JSONs go to
+  PD. The login node has no AVX: never import JAX there.
 - ManySegmentAnt: gymnasium-robotics 1.4.2 `get_parts_and_edges` has wrong
   qpos/qvel ids (all but the last segment point into the root joint),
   act_ids that swap the two legs of a segment, and deepcopied
@@ -51,7 +65,7 @@
   tolerance 1e-8, so MJX always ran all 100/50. One-step qvel vs 100/50 over
   100 random steps: max |Δ| 1.9e-6 (n_segs 2), 1.3e-5 (16); 4/8 deviates
   (4.5 at 16). ~2× env steps/s on CPU.
-- JAX MAPPO = torch `mappo.py` (v2); actors padded to the partition max:
+- JAX MAPPO = torch `mappo.py` of v2 (`52a7a0a`); actors padded to the partition max:
   padded obs inputs are zeroed, padded action slots are masked in
   log-prob/entropy and never gathered into the env action, so padded
   params get zero grads and stay zero. Init each actor at its true size,
